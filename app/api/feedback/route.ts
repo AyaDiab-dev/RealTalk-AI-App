@@ -32,15 +32,18 @@ function extractJson(text: string): string {
     .replace(/```/g, '')
     .trim()
 
-  const jsonStart = cleaned.indexOf('{')
-  const jsonEnd = cleaned.lastIndexOf('}')
+  // Try to extract JSON safely
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
 
-  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
-    throw new Error('No valid JSON object found in Gemini response')
+  if (!jsonMatch) {
+    console.error('RAW RESPONSE:', cleaned)
+    throw new Error('No valid JSON found in response')
   }
 
-  return cleaned.substring(jsonStart, jsonEnd + 1)
+  return jsonMatch[0]
 }
+
+  
 
 export async function POST(req: Request) {
   try {
