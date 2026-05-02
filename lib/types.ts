@@ -11,6 +11,7 @@ export interface ConversationSetup {
 
 export interface Feedback {
   readinessScore: number
+  scoreJustification?: string
   whatUserDidWell: string[]
   whatUserDidWrong: string[]
   betterResponse: {

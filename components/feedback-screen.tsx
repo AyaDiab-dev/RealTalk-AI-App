@@ -161,6 +161,11 @@ export function FeedbackScreen({
               value={feedback.readinessScore * 10}
               className="h-2"
             />
+            {feedback.scoreJustification && (
+              <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
+                {feedback.scoreJustification}
+              </p>
+            )}
           </CardContent>
         </Card>
 

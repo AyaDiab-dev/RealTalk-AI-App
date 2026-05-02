@@ -97,48 +97,63 @@ export async function POST(req: Request) {
 
     const isJobInterview = setup.conversationType === 'job-interview'
     
-    const prompt = isJobInterview ? `${scenarioFocus}
+    const prompt = isJobInterview ? `You are a senior interview coach analyzing a job interview practice session. Your feedback must be SPECIFIC to THIS conversation - no generic advice allowed.
 
-CANDIDATE'S STATED GOAL: ${setup.userGoal}
-CANDIDATE'S ROLE: ${setup.userRole}
-INTERVIEWER STYLE: ${aiPersonalityLabels[setup.aiPersonality]}
+INTERVIEW CONTEXT:
+- Candidate's Role: ${setup.userRole}
+- Candidate's Goal: ${setup.userGoal}
+- Interviewer Style: ${aiPersonalityLabels[setup.aiPersonality]}
 
-IMPORTANT INSTRUCTIONS:
-1. Read through EVERY candidate response carefully
-2. For "whatUserDidWell" - quote specific phrases they said that were strong
-3. For "whatUserDidWrong" - quote specific phrases that were weak, vague, or could hurt them
-4. For "betterResponse.original" - copy the candidate's WEAKEST answer word-for-word
-5. For "betterResponse.improved" - rewrite that answer using STAR method, specific metrics, and confident language
-6. Score realistically: most candidates score 4-7. Only exceptional performances get 8+. Poor performances get 3 or below.
+FULL CONVERSATION TRANSCRIPT:
+${conversationText}
 
-RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
+YOUR TASK: Analyze the candidate's ACTUAL responses above and provide detailed, quote-based feedback.
+
+SCORING SYSTEM (calculate total out of 10):
+- Clarity (0-2): Did they express ideas clearly without rambling?
+- Structure (0-2): Did they use frameworks (STAR, etc.) to organize answers?
+- Specificity (0-2): Did they give concrete examples with real details (numbers, timelines, outcomes)?
+- Confidence (0-2): Did they avoid hedging words ("I think", "maybe", "kind of", "sort of")?
+- Relevance (0-2): Did they answer what was asked and connect to the role?
+
+MANDATORY REQUIREMENTS:
+1. EVERY item in "whatUserDidWell" MUST include a direct quote from the transcript above
+2. EVERY item in "whatUserDidWrong" MUST reference a specific moment with a quote
+3. "betterResponse.original" MUST be copied EXACTLY from one of the candidate's weaker answers above
+4. "betterResponse.improved" MUST be a complete rewritten answer (not advice), 3-5 sentences, using STAR method
+5. "scoreJustification" MUST explain why you gave this score based on the 5 criteria
+
+BE CRITICAL: Real interviewers notice vague answers, missing metrics, hedging language, and generic statements. Point these out specifically.
+
+RESPOND WITH ONLY THIS JSON (no markdown, no code blocks):
 {
-  "readinessScore": <1-10 based on the 5 criteria above>,
+  "readinessScore": <number 1-10>,
+  "scoreJustification": "<2-3 sentences explaining the score based on Clarity, Structure, Specificity, Confidence, Relevance>",
   "whatUserDidWell": [
-    "Strong point with quote: 'exact words they said'",
-    "Another strength with evidence from conversation",
-    "Third specific strength"
+    "You demonstrated [strength] when you said: '[exact quote from transcript]'",
+    "Your answer about [topic] was effective because you mentioned '[specific detail they gave]'",
+    "Strong moment: '[quote]' - this shows [why it's good]"
   ],
   "whatUserDidWrong": [
-    "Weakness: when asked X, you said 'their exact weak answer' - this fails because...",
-    "Missed opportunity: you could have mentioned...",
-    "Language issue: phrases like 'their exact hedging words' undermine confidence"
+    "When asked about [topic], you said '[their exact weak quote]' - this is too vague because [reason]",
+    "You missed an opportunity to [what they should have done] when discussing [topic]",
+    "Hedging language like '[their exact hedging phrase]' undermines your confidence"
   ],
   "betterResponse": {
-    "original": "<copy their weakest answer exactly as they said it>",
-    "improved": "<complete rewritten answer of 3-5 sentences using STAR method, specific numbers, and confident tone>"
+    "original": "[Copy one of the candidate's weaker answers EXACTLY as they said it - word for word from the transcript]",
+    "improved": "[Complete rewritten answer using STAR: Situation in 1 sentence, Task in 1 sentence, Action with specific details and numbers, Result with measurable outcome]"
   },
   "practicalTips": [
-    "Specific tip based on their actual mistakes",
-    "Another actionable improvement",
-    "Third practical suggestion",
-    "Fourth concrete technique",
-    "Fifth specific recommendation"
+    "Based on your answer about [topic], practice [specific technique]",
+    "Replace '[their weak phrase]' with '[stronger alternative]'",
+    "For questions about [topic type], prepare [specific preparation advice]",
+    "Your [specific issue] could be fixed by [concrete action]",
+    "Before your real interview, [specific practice recommendation based on their weaknesses]"
   ],
   "thingsToWorkOn": [
-    "First priority area based on this conversation",
-    "Second development area",
-    "Third focus area"
+    "[Most critical issue based on this conversation]",
+    "[Second priority based on patterns in their answers]",
+    "[Third area needing development]"
   ]
 }` : `You are an expert conversation coach analyzing a practice conversation.
 
