@@ -1,18 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { UIMessage } from 'ai'
 import { SetupScreen } from '@/components/setup-screen'
 import { ChatScreen } from '@/components/chat-screen'
 import { FeedbackScreen } from '@/components/feedback-screen'
 import { ConversationSetup } from '@/lib/types'
+
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
 
 type AppState = 'setup' | 'chat' | 'feedback'
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>('setup')
   const [setup, setSetup] = useState<ConversationSetup | null>(null)
-  const [conversationMessages, setConversationMessages] = useState<UIMessage[]>([])
+  const [conversationMessages, setConversationMessages] = useState<Message[]>([])
 
   const handleStart = (newSetup: ConversationSetup) => {
     setSetup(newSetup)
@@ -26,7 +31,7 @@ export default function Home() {
     setConversationMessages([])
   }
 
-  const handleGetFeedback = (messages: UIMessage[]) => {
+  const handleGetFeedback = (messages: Message[]) => {
     setConversationMessages(messages)
     setAppState('feedback')
   }

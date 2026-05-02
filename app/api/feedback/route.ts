@@ -1,70 +1,91 @@
-import { generateText, Output } from 'ai'
-import { google } from '@ai-sdk/google'
-import { z } from 'zod'
-import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { ConversationSetup, conversationTypeLabels, aiPersonalityLabels } from '@/lib/types'
 
 export const maxDuration = 60
 
-const feedbackSchema = z.object({
-  readinessScore: z.number().min(1).max(10),
-  whatUserDidWell: z.array(z.string()),
-  whatUserDidWrong: z.array(z.string()),
-  betterResponse: z.object({
-    original: z.string(),
-    improved: z.string(),
-  }),
-  practicalTips: z.array(z.string()),
-  thingsToWorkOn: z.array(z.string()),
-})
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 export async function POST(req: Request) {
   try {
-    const { messages, setup }: { messages: { role: string; content: string }[]; setup: ConversationSetup } = await req.json()
+    const { messages, setup }: { messages: Message[]; setup: ConversationSetup } = await req.json()
 
-    const conversationTranscript = messages
-      .map(m => `${m.role === 'user' ? 'USER' : 'AI PARTNER'}: ${m.content}`)
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return Response.json(
+        { error: 'GEMINI_API_KEY is not configured. Please add it to your environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+
+    const conversationText = messages
+      .map((m) => `${m.role === 'user' ? 'User' : 'AI Partner'}: ${m.content}`)
       .join('\n\n')
 
-    const result = await generateText({
-      model: google('gemini-1.5-flash'),
-      output: Output.object({ schema: feedbackSchema }),
-      prompt: `You are an expert communication coach analyzing a practice conversation.
+    const prompt = `You are an expert conversation coach analyzing a practice conversation.
 
-CONTEXT:
-- Scenario: ${conversationTypeLabels[setup.conversationType]}
+SCENARIO DETAILS:
+- Conversation Type: ${conversationTypeLabels[setup.conversationType]}
 - User's Role: ${setup.userRole}
+- AI Partner Personality: ${aiPersonalityLabels[setup.aiPersonality]}
 - User's Goal: ${setup.userGoal}
 
 CONVERSATION TRANSCRIPT:
-${conversationTranscript}
+${conversationText}
 
-Analyze this conversation and provide detailed feedback. Be specific and actionable.
+Analyze how well the user performed in achieving their goal. Provide constructive, specific feedback.
 
-For "readinessScore": Rate from 1-10 how ready the user is for this type of real conversation.
+You MUST respond with ONLY valid JSON in this exact format (no markdown, no code blocks, just raw JSON):
+{
+  "readinessScore": <number 1-10>,
+  "whatUserDidWell": ["<specific strength 1>", "<specific strength 2>", "<specific strength 3>"],
+  "whatUserDidWrong": ["<specific area for improvement 1>", "<specific area for improvement 2>", "<specific area for improvement 3>"],
+  "betterResponse": {
+    "original": "<exact quote of user's weakest response>",
+    "improved": "<rewritten version showing how it could be better>"
+  },
+  "practicalTips": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>", "<actionable tip 4>", "<actionable tip 5>"],
+  "thingsToWorkOn": ["<focus area 1>", "<focus area 2>", "<focus area 3>"]
+}
 
-For "whatUserDidWell": List 2-4 specific things the user did well with examples from the conversation.
+Be specific and reference actual things the user said. Don't be generic.`
 
-For "whatUserDidWrong": List 2-4 specific mistakes or missed opportunities with examples.
-
-For "betterResponse": Pick ONE user response that could be improved and provide:
-- "original": The exact response the user gave
-- "improved": A better version with explanation of why it's better
-
-For "practicalTips": Provide exactly 5 actionable tips for improving in this type of conversation.
-
-For "thingsToWorkOn": List exactly 3 specific skills or areas the user should focus on developing.
-
-Be constructive, specific, and encouraging while being honest about areas for improvement.`,
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1500,
+      },
     })
 
-    return Response.json(result.object)
+    const result = await model.generateContent(prompt)
+    const responseText = result.response.text()
+    
+    // Clean the response - remove markdown code blocks if present
+    let cleanedResponse = responseText.trim()
+    if (cleanedResponse.startsWith('```json')) {
+      cleanedResponse = cleanedResponse.slice(7)
+    } else if (cleanedResponse.startsWith('```')) {
+      cleanedResponse = cleanedResponse.slice(3)
+    }
+    if (cleanedResponse.endsWith('```')) {
+      cleanedResponse = cleanedResponse.slice(0, -3)
+    }
+    cleanedResponse = cleanedResponse.trim()
+
+    const feedback = JSON.parse(cleanedResponse)
+
+    return Response.json(feedback)
   } catch (error) {
-    console.error('[v0] Feedback API error:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to generate feedback. Please check your GEMINI_API_KEY configuration.' 
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    console.error('Feedback API error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return Response.json(
+      { error: `Failed to generate feedback: ${errorMessage}` },
+      { status: 500 }
     )
   }
 }

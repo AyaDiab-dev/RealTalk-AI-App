@@ -1,13 +1,12 @@
-import {
-  consumeStream,
-  convertToModelMessages,
-  streamText,
-  UIMessage,
-} from 'ai'
-import { google } from '@ai-sdk/google'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
 
 export const maxDuration = 60
+
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 function buildSystemPrompt(setup: ConversationSetup, messageCount: number): string {
   const isOpening = messageCount === 0
@@ -182,30 +181,53 @@ Remember: Make this feel like a REAL ${conversationTypeLabels[setup.conversation
 
 export async function POST(req: Request) {
   try {
-    const { messages, setup }: { messages: UIMessage[]; setup: ConversationSetup } = await req.json()
+    const { messages, setup }: { messages: Message[]; setup: ConversationSetup } = await req.json()
 
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      return Response.json(
+        { error: 'GEMINI_API_KEY is not configured. Please add it to your environment variables.' },
+        { status: 500 }
+      )
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey)
     const systemPrompt = buildSystemPrompt(setup, messages.length)
-
-    const result = streamText({
-      model: google('gemini-1.5-flash'),
-      system: systemPrompt,
-      messages: await convertToModelMessages(messages),
-      temperature: 0.85,
-      maxOutputTokens: 300,
-      abortSignal: req.signal,
+    
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      systemInstruction: systemPrompt,
     })
 
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      consumeSseStream: consumeStream,
+    // Convert messages to Gemini format (exclude the last user message which we'll send)
+    const chatHistory = messages.slice(0, -1).map((msg) => ({
+      role: msg.role === 'user' ? 'user' as const : 'model' as const,
+      parts: [{ text: msg.content }],
+    }))
+
+    const chat = model.startChat({
+      history: chatHistory,
+      generationConfig: {
+        temperature: 0.85,
+        maxOutputTokens: 300,
+      },
+    })
+
+    const lastMessage = messages[messages.length - 1]
+    const result = await chat.sendMessage(lastMessage?.content || 'Start the conversation.')
+
+    const responseText = result.response.text()
+
+    return Response.json({ 
+      role: 'assistant',
+      content: responseText 
     })
   } catch (error) {
-    console.error('[v0] Chat API error:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to generate response. Please check your GEMINI_API_KEY configuration.' 
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    console.error('Chat API error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return Response.json(
+      { error: `Failed to generate response: ${errorMessage}` },
+      { status: 500 }
     )
   }
 }

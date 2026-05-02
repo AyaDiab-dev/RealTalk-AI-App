@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UIMessage } from 'ai'
 import {
   CheckCircle2,
   XCircle,
@@ -19,19 +18,17 @@ import { ConversationSetup, Feedback, conversationTypeLabels } from '@/lib/types
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
-interface FeedbackScreenProps {
-  setup: ConversationSetup
-  messages: UIMessage[]
-  onStartNew: () => void
-  onTryAgain: () => void
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
 }
 
-function getMessageText(message: UIMessage): string {
-  if (!message.parts || !Array.isArray(message.parts)) return ''
-  return message.parts
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map((p) => p.text)
-    .join('')
+interface FeedbackScreenProps {
+  setup: ConversationSetup
+  messages: Message[]
+  onStartNew: () => void
+  onTryAgain: () => void
 }
 
 export function FeedbackScreen({
@@ -52,7 +49,7 @@ export function FeedbackScreen({
 
         const formattedMessages = messages.map((m) => ({
           role: m.role,
-          content: getMessageText(m),
+          content: m.content,
         }))
 
         const response = await fetch('/api/feedback', {

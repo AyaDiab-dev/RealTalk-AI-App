@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport, UIMessage } from 'ai'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,53 +9,78 @@ import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface ChatScreenProps {
   setup: ConversationSetup
   onEnd: () => void
-  onGetFeedback: (messages: UIMessage[]) => void
-}
-
-function getMessageText(message: UIMessage): string {
-  if (!message.parts || !Array.isArray(message.parts)) return ''
-  return message.parts
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-    .map((p) => p.text)
-    .join('')
+  onGetFeedback: (messages: Message[]) => void
 }
 
 export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
   const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  const { messages, sendMessage, status, stop } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
-      prepareSendMessagesRequest: ({ id, messages }) => ({
-        body: {
-          id,
-          messages,
-          setup,
-        },
-      }),
-    }),
-    onError: (err) => {
-      console.error('[v0] Chat error:', err)
-      setError('Failed to get AI response. The AI Gateway may require credit card verification. Please check your Vercel account settings.')
-    },
-  })
-
-  const isLoading = status === 'streaming' || status === 'submitted'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const sendMessage = useCallback(async (userMessage: string) => {
+    setError(null)
+    setIsLoading(true)
+
+    const newUserMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userMessage,
+    }
+
+    const updatedMessages = [...messages, newUserMessage]
+    setMessages(updatedMessages)
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          setup,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get response')
+      }
+
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: data.content,
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get AI response'
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [messages, setup])
+
   // Auto-start conversation
   useEffect(() => {
     if (messages.length === 0) {
-      sendMessage({ text: `Hello, I'm ready to practice this ${conversationTypeLabels[setup.conversationType].toLowerCase()} scenario.` })
+      sendMessage(`Hello, I'm ready to practice this ${conversationTypeLabels[setup.conversationType].toLowerCase()} scenario.`)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -65,8 +88,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
-    setError(null)
-    sendMessage({ text: input.trim() })
+    sendMessage(input.trim())
     setInput('')
     textareaRef.current?.focus()
   }
@@ -140,7 +162,9 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
                     if (messages.length > 0) {
                       const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
                       if (lastUserMessage) {
-                        sendMessage({ text: getMessageText(lastUserMessage) })
+                        // Remove the last user message and retry
+                        setMessages(prev => prev.slice(0, -1))
+                        sendMessage(lastUserMessage.content)
                       }
                     }
                   }}
@@ -173,11 +197,11 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
                       : 'bg-secondary text-secondary-foreground rounded-bl-md'
                   )}
                 >
-                  {getMessageText(message)}
+                  {message.content}
                 </div>
               </div>
             ))}
-            {isLoading && messages[messages.length - 1]?.role === 'user' && (
+            {isLoading && (
               <div className="flex gap-3 justify-start">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                   <MessageSquare className="w-4 h-4 text-primary" />
@@ -208,26 +232,14 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
                 rows={1}
               />
             </div>
-            {isLoading ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={stop}
-                className="h-[52px] w-[52px]"
-              >
-                <Square className="w-4 h-4" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!input.trim()}
-                className="h-[52px] w-[52px]"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            )}
+            <Button
+              type="submit"
+              size="icon"
+              disabled={!input.trim() || isLoading}
+              className="h-[52px] w-[52px]"
+            >
+              {isLoading ? <Spinner className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+            </Button>
           </form>
           <p className="text-xs text-muted-foreground text-center mt-3">
             {messages.length < 4
