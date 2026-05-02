@@ -233,8 +233,8 @@ JSON FORMAT:
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 2500,
+        temperature:0.3,
+        maxOutputTokens: 8192,
       },
     })
 
