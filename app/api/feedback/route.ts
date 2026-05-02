@@ -1,5 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { ConversationSetup, ConversationType, conversationTypeLabels, aiPersonalityLabels } from '@/lib/types'
+import {
+  ConversationSetup,
+  ConversationType,
+  conversationTypeLabels,
+  aiPersonalityLabels,
+} from '@/lib/types'
 
 export const maxDuration = 60
 
@@ -8,71 +13,33 @@ interface Message {
   content: string
 }
 
-function getScenarioFeedbackFocus(conversationType: ConversationType, conversationText: string): string {
+function getScenarioFeedbackFocus(conversationType: ConversationType): string {
   const focusAreas: Record<ConversationType, string> = {
-    'job-interview': `You are a senior HR professional and interview coach providing detailed feedback.
-
-SCORING CRITERIA (use this to calculate readinessScore 1-10):
-- Clarity (0-2 points): Were answers easy to follow? Did they ramble or stay focused?
-- Structure (0-2 points): Did they use frameworks like STAR? Were thoughts organized?
-- Technical Depth (0-2 points): Did they demonstrate real expertise and knowledge?
-- Use of Examples (0-2 points): Did they give specific, concrete examples with details?
-- Confidence (0-2 points): Did they sound assured? Did they hedge excessively?
-
-FEEDBACK REQUIREMENTS:
-1. STRENGTHS - Quote specific phrases the user said that were effective. Example: "When you said 'I led a team of 5 engineers to deliver the project 2 weeks early', that was excellent because..."
-
-2. WEAKNESSES - Quote specific phrases that were weak or vague. Example: "When asked about your weakness, you said 'I work too hard' - this is a cliché that interviewers see through..."
-
-3. IMPROVED RESPONSE - Find the user's WEAKEST answer in the conversation. Copy it EXACTLY as the "original", then rewrite it completely as "improved" using STAR method, specific numbers, and confident language.
-
-4. Be CRITICAL - Real interviewers are tough. Point out vague answers, missing examples, nervous language ("I think", "maybe", "kind of"), and missed opportunities.
-
-CONVERSATION TO ANALYZE:
-${conversationText}`,
-
-    'strict-manager': `Focus your feedback on:
-- Professionalism and composure under pressure
-- Accountability and ownership of issues
-- Calmness and non-defensive communication
-- Quality of action plans and proposed solutions
-- Ability to set realistic expectations
-Quote specific things the user said to support your feedback.`,
-
-    'negotiation': `Focus your feedback on:
-- Persuasion techniques and value articulation
-- Use of leverage and positioning
-- Maintaining boundaries while staying flexible
-- Quality of counteroffers and creative solutions
-- Handling pressure and pushback
-Quote specific things the user said to support your feedback.`,
-
-    'friends-conflict': `Focus your feedback on:
-- Empathy and emotional intelligence
-- Emotional control and non-escalation
-- Clarity in expressing feelings and needs
-- Tone appropriateness for friendship context
-- Balance between assertiveness and understanding
-Quote specific things the user said to support your feedback.`,
-
-    'presentation': `Focus your feedback on:
-- Structure and logical flow of arguments
-- Confidence and clarity in delivery
-- Use of evidence and supporting data
-- Ability to handle Q&A effectively
-- Audience engagement and responsiveness
-Quote specific things the user said to support your feedback.`,
-
-    'debate': `Focus your feedback on:
-- Logical strength of arguments
-- Use of evidence and facts
-- Handling of counterarguments
-- Confidence and assertiveness
-- Ability to stay on point under pressure
-Quote specific things the user said to support your feedback.`,
+    'job-interview': `Focus on interview performance: clarity, structure, technical depth, confidence, relevance, specificity, and ability to answer under pressure.`,
+    'strict-manager': `Focus on professionalism, accountability, calmness under pressure, action plans, ownership, and expectation-setting.`,
+    negotiation: `Focus on persuasion, leverage, boundaries, counteroffers, confidence, and ability to handle pushback.`,
+    'friends-conflict': `Focus on empathy, emotional control, clarity, tone, assertiveness, and conflict resolution.`,
+    presentation: `Focus on structure, clarity, confidence, evidence, Q&A handling, and audience engagement.`,
+    debate: `Focus on logic, evidence, counterarguments, confidence, staying on point, and handling pressure.`,
   }
 
   return focusAreas[conversationType]
+}
+
+function extractJson(text: string): string {
+  let cleaned = text
+    .replace(/```json/g, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const jsonStart = cleaned.indexOf('{')
+  const jsonEnd = cleaned.lastIndexOf('}')
+
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+    throw new Error('No valid JSON object found in Gemini response')
+  }
+
+  return cleaned.substring(jsonStart, jsonEnd + 1)
 }
 
 export async function POST(req: Request) {
@@ -80,11 +47,35 @@ export async function POST(req: Request) {
     const { messages, setup }: { messages: Message[]; setup: ConversationSetup } = await req.json()
 
     const apiKey = process.env.GEMINI_API_KEY
+
     if (!apiKey) {
       return Response.json(
         { error: 'GEMINI_API_KEY is not configured. Please add it to your environment variables.' },
         { status: 500 }
       )
+    }
+
+    if (!messages || messages.length < 3) {
+      return Response.json({
+        readinessScore: 3,
+        scoreJustification:
+          'There are not enough exchanges to provide detailed feedback yet. Complete at least a few back-and-forth messages first.',
+        whatUserDidWell: ['You started the practice session and engaged with the scenario.'],
+        whatUserDidWrong: ['The conversation is too short to analyze strengths and weaknesses meaningfully.'],
+        betterResponse: {
+          original: 'Not enough response data',
+          improved:
+            'Continue the conversation with at least two detailed answers so the feedback can analyze your clarity, structure, and specificity.',
+        },
+        practicalTips: [
+          'Answer at least 2–3 questions before requesting feedback.',
+          'Use concrete examples from your projects.',
+          'Mention your specific actions, not only the general problem.',
+          'Add measurable outcomes when possible.',
+          'Stay calm and answer directly under pressure.',
+        ],
+        thingsToWorkOn: ['Provide more answers', 'Use specific examples', 'Add measurable impact'],
+      })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
@@ -93,209 +84,193 @@ export async function POST(req: Request) {
       .map((m, i) => `[${i + 1}] ${m.role === 'user' ? 'CANDIDATE' : 'INTERVIEWER'}: ${m.content}`)
       .join('\n\n')
 
-    const scenarioFocus = getScenarioFeedbackFocus(setup.conversationType, conversationText)
-
+    const scenarioFocus = getScenarioFeedbackFocus(setup.conversationType)
     const isJobInterview = setup.conversationType === 'job-interview'
-    
-    const prompt = isJobInterview ? `You are a senior interview coach analyzing a job interview practice session. Your feedback must be SPECIFIC to THIS conversation - no generic advice allowed.
+
+    const prompt = isJobInterview
+      ? `
+You are a senior interview coach analyzing a job interview practice session.
+
+IMPORTANT:
+Your feedback must be based ONLY on the actual conversation transcript.
+Generic feedback is forbidden.
+You must quote or clearly reference the candidate's real answers.
 
 INTERVIEW CONTEXT:
-- Candidate's Role: ${setup.userRole}
-- Candidate's Goal: ${setup.userGoal}
+- Candidate Role: ${setup.userRole}
+- Candidate Goal: ${setup.userGoal}
 - Interviewer Style: ${aiPersonalityLabels[setup.aiPersonality]}
 
 FULL CONVERSATION TRANSCRIPT:
 ${conversationText}
 
-YOUR TASK: Analyze the candidate's ACTUAL responses above and provide detailed, quote-based feedback.
+SCORING SYSTEM:
+Give a readinessScore from 1 to 10 based on:
+- Clarity
+- Structure
+- Technical depth
+- Specificity and examples
+- Confidence under pressure
+- Relevance to the role
 
-SCORING SYSTEM (calculate total out of 10):
-- Clarity (0-2): Did they express ideas clearly without rambling?
-- Structure (0-2): Did they use frameworks (STAR, etc.) to organize answers?
-- Specificity (0-2): Did they give concrete examples with real details (numbers, timelines, outcomes)?
-- Confidence (0-2): Did they avoid hedging words ("I think", "maybe", "kind of", "sort of")?
-- Relevance (0-2): Did they answer what was asked and connect to the role?
+REQUIREMENTS:
+1. whatUserDidWell:
+- Must include specific references or quotes from the candidate.
+- Do not write generic lines like "engaged in the conversation".
 
-MANDATORY REQUIREMENTS:
-1. EVERY item in "whatUserDidWell" MUST include a direct quote from the transcript above
-2. EVERY item in "whatUserDidWrong" MUST reference a specific moment with a quote
-3. "betterResponse.original" MUST be copied EXACTLY from one of the candidate's weaker answers above
-4. "betterResponse.improved" MUST be a complete rewritten answer (not advice), 3-5 sentences, using STAR method
-5. "scoreJustification" MUST explain why you gave this score based on the 5 criteria
+2. whatUserDidWrong:
+- Must identify real weaknesses from the candidate's answers.
+- If the candidate was honest about lack of production experience, mention it constructively.
+- If answers lacked metrics, say that specifically.
 
-BE CRITICAL: Real interviewers notice vague answers, missing metrics, hedging language, and generic statements. Point these out specifically.
+3. betterResponse:
+- original must be copied or summarized from one real weaker candidate answer.
+- improved must be a complete better answer, not advice.
+- The improved answer should be 4–6 sentences and more confident, structured, and specific.
 
-RESPOND WITH ONLY THIS JSON (no markdown, no code blocks):
+4. practicalTips:
+- Must be based on the actual weaknesses in this conversation.
+
+5. thingsToWorkOn:
+- Must be concrete focus areas from this exact interview.
+
+Return ONLY valid JSON.
+Do not include markdown.
+Do not include explanations outside JSON.
+Start with { and end with }.
+
+JSON FORMAT:
 {
-  "readinessScore": <number 1-10>,
-  "scoreJustification": "<2-3 sentences explaining the score based on Clarity, Structure, Specificity, Confidence, Relevance>",
+  "readinessScore": 7,
+  "scoreJustification": "Explain the score in 2-3 sentences using evidence from the conversation.",
   "whatUserDidWell": [
-    "You demonstrated [strength] when you said: '[exact quote from transcript]'",
-    "Your answer about [topic] was effective because you mentioned '[specific detail they gave]'",
-    "Strong moment: '[quote]' - this shows [why it's good]"
+    "Specific strength with quote or reference.",
+    "Specific strength with quote or reference.",
+    "Specific strength with quote or reference."
   ],
   "whatUserDidWrong": [
-    "When asked about [topic], you said '[their exact weak quote]' - this is too vague because [reason]",
-    "You missed an opportunity to [what they should have done] when discussing [topic]",
-    "Hedging language like '[their exact hedging phrase]' undermines your confidence"
+    "Specific weakness with quote or reference.",
+    "Specific weakness with quote or reference.",
+    "Specific weakness with quote or reference."
   ],
   "betterResponse": {
-    "original": "[Copy one of the candidate's weaker answers EXACTLY as they said it - word for word from the transcript]",
-    "improved": "[Complete rewritten answer using STAR: Situation in 1 sentence, Task in 1 sentence, Action with specific details and numbers, Result with measurable outcome]"
+    "original": "A real weaker answer or part of an answer from the candidate.",
+    "improved": "A complete rewritten stronger answer."
   },
   "practicalTips": [
-    "Based on your answer about [topic], practice [specific technique]",
-    "Replace '[their weak phrase]' with '[stronger alternative]'",
-    "For questions about [topic type], prepare [specific preparation advice]",
-    "Your [specific issue] could be fixed by [concrete action]",
-    "Before your real interview, [specific practice recommendation based on their weaknesses]"
+    "Specific practical tip 1.",
+    "Specific practical tip 2.",
+    "Specific practical tip 3.",
+    "Specific practical tip 4.",
+    "Specific practical tip 5."
   ],
   "thingsToWorkOn": [
-    "[Most critical issue based on this conversation]",
-    "[Second priority based on patterns in their answers]",
-    "[Third area needing development]"
+    "Focus area 1.",
+    "Focus area 2.",
+    "Focus area 3."
   ]
-}` : `You are an expert conversation coach analyzing a practice conversation.
+}
+`
+      : `
+You are an expert communication coach analyzing a roleplay conversation.
 
 SCENARIO DETAILS:
 - Conversation Type: ${conversationTypeLabels[setup.conversationType]}
-- User's Role: ${setup.userRole}
-- AI Partner Personality: ${aiPersonalityLabels[setup.aiPersonality]}
-- User's Goal: ${setup.userGoal}
+- User Role: ${setup.userRole}
+- AI Personality: ${aiPersonalityLabels[setup.aiPersonality]}
+- User Goal: ${setup.userGoal}
 
+FOCUS:
 ${scenarioFocus}
 
 CONVERSATION TRANSCRIPT:
 ${conversationText}
 
-Analyze how well the user performed. Be specific and reference actual things the user said.
+Analyze the user's performance based only on the transcript.
+Be specific. Quote or reference actual user responses.
 
-RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
+Return ONLY valid JSON.
+Do not include markdown.
+Do not include explanations outside JSON.
+Start with { and end with }.
+
+JSON FORMAT:
 {
-  "readinessScore": <number 1-10>,
-  "whatUserDidWell": ["<specific strength with quote>", "<strength 2>", "<strength 3>"],
-  "whatUserDidWrong": ["<specific weakness with quote>", "<weakness 2>", "<weakness 3>"],
+  "readinessScore": 7,
+  "scoreJustification": "Explain the score in 2-3 sentences.",
+  "whatUserDidWell": [
+    "Specific strength with quote or reference.",
+    "Specific strength with quote or reference.",
+    "Specific strength with quote or reference."
+  ],
+  "whatUserDidWrong": [
+    "Specific weakness with quote or reference.",
+    "Specific weakness with quote or reference.",
+    "Specific weakness with quote or reference."
+  ],
   "betterResponse": {
-    "original": "<exact quote of user's weakest response>",
-    "improved": "<much better rewritten version>"
+    "original": "A real weaker answer or part of an answer from the user.",
+    "improved": "A complete rewritten stronger answer."
   },
-  "practicalTips": ["<tip 1>", "<tip 2>", "<tip 3>", "<tip 4>", "<tip 5>"],
-  "thingsToWorkOn": ["<focus 1>", "<focus 2>", "<focus 3>"]
-}`
+  "practicalTips": [
+    "Specific practical tip 1.",
+    "Specific practical tip 2.",
+    "Specific practical tip 3.",
+    "Specific practical tip 4.",
+    "Specific practical tip 5."
+  ],
+  "thingsToWorkOn": [
+    "Focus area 1.",
+    "Focus area 2.",
+    "Focus area 3."
+  ]
+}
+`
 
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 2000,
-        
+        temperature: 0.4,
+        maxOutputTokens: 2500,
       },
     })
 
     const result = await model.generateContent(prompt)
     const responseText = result.response.text()
-    console.log("RAW GEMINI RESPONSE:", responseText)
-    
-    // Clean the response - remove markdown code blocks if present
-    let cleanedResponse = responseText.trim()
-    // Extract ONLY valid JSON part
-    const jsonStart = cleanedResponse.indexOf('{')
-    const jsonEnd = cleanedResponse.lastIndexOf('}')
 
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-       cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1)
-    }else {
-     throw new Error("No JSON found in Gemini response")
+    console.log('RAW GEMINI RESPONSE:', responseText)
+
+    const jsonText = extractJson(responseText)
+
+    let feedback
+
+    try {
+      feedback = JSON.parse(jsonText)
+    } catch (error) {
+      console.error('Failed to parse Gemini JSON:', jsonText)
+      throw new Error('Failed to parse Gemini feedback JSON')
     }
 
-    // // Remove markdown code fences (```json ... ``` or ``` ... ```)
-    // const jsonMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)```/)
-    // if (jsonMatch) {
-    //   cleanedResponse = jsonMatch[1].trim()
-    // } else {
-    //   // Try to extract JSON object directly
-    //   const jsonObjectMatch = cleanedResponse.match(/\{[\s\S]*\}/)
-    //   if (jsonObjectMatch) {
-    //     cleanedResponse = jsonObjectMatch[0]
-    //   }
-    // }
-
-    // let feedback
-    // try {
-    //   feedback = JSON.parse(cleanedResponse)
-    // } catch {
-    //   // Return a safe fallback if parsing fails
-    //   console.error('Failed to parse Gemini response:', cleanedResponse)
-    //   feedback = {
-    //     readinessScore: 5,
-    //     whatUserDidWell: [
-    //       'Engaged in the conversation actively',
-    //       'Showed willingness to practice difficult scenarios',
-    //       'Maintained the conversation flow'
-    //     ],
-    //     whatUserDidWrong: [
-    //       'Could provide more specific examples',
-    //       'Could be more concise in responses',
-    //       'Could ask more clarifying questions'
-    //     ],
-    //     betterResponse: {
-    //       original: 'Your response',
-    //       improved: 'Try to be more specific and provide concrete examples when answering questions.'
-    //     },
-    //     practicalTips: [
-    //       'Prepare specific examples before important conversations',
-    //       'Practice active listening and ask follow-up questions',
-    //       'Stay calm under pressure and take time to think before responding',
-    //       'Use the STAR method for behavioral questions',
-    //       'End conversations on a positive note with clear next steps'
-    //     ],
-    //     thingsToWorkOn: [
-    //       'Specificity in answers',
-    //       'Confidence in delivery',
-    //       'Handling unexpected questions'
-    //     ]
-    //   }
-    // }
-    let feedback
-try {
-  feedback = JSON.parse(cleanedResponse)
-} catch (error) {
-  console.error('❌ Failed to parse Gemini response:', cleanedResponse)
-  throw new Error("Failed to parse Gemini feedback JSON")
-}
-
-    return Response.json(feedback)
+    return Response.json({
+      readinessScore: feedback.readinessScore ?? 5,
+      scoreJustification: feedback.scoreJustification ?? '',
+      whatUserDidWell: feedback.whatUserDidWell ?? [],
+      whatUserDidWrong: feedback.whatUserDidWrong ?? [],
+      betterResponse: feedback.betterResponse ?? {
+        original: '',
+        improved: '',
+      },
+      practicalTips: feedback.practicalTips ?? [],
+      thingsToWorkOn: feedback.thingsToWorkOn ?? [],
+    })
   } catch (error) {
     console.error('Feedback API error:', error)
-    // Return fallback feedback instead of error
-    return Response.json({
-      readinessScore: 5,
-      whatUserDidWell: [
-        'Completed the practice session',
-        'Showed commitment to improving',
-        'Engaged with the scenario'
-      ],
-      whatUserDidWrong: [
-        'Could not analyze specific areas due to a technical issue',
-        'Try another session for detailed feedback',
-        'Consider reviewing your responses'
-      ],
-      betterResponse: {
-        original: 'Unable to analyze',
-        improved: 'Try running the feedback again for specific suggestions.'
+
+    return Response.json(
+      {
+        error: 'Something went wrong while generating feedback. Please try again.',
       },
-      practicalTips: [
-        'Practice with different scenarios to build versatility',
-        'Record yourself and review your responses',
-        'Ask for feedback from real people when possible',
-        'Stay calm and take your time when responding',
-        'Focus on clarity and specificity'
-      ],
-      thingsToWorkOn: [
-        'General communication skills',
-        'Scenario-specific techniques',
-        'Confidence and composure'
-      ]
-    })
+      { status: 500 }
+    )
   }
 }
