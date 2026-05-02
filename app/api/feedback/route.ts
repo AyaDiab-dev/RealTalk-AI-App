@@ -198,18 +198,27 @@ RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
     
     // Clean the response - remove markdown code blocks if present
     let cleanedResponse = responseText.trim()
-    
-    // Remove markdown code fences (```json ... ``` or ``` ... ```)
-    const jsonMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      cleanedResponse = jsonMatch[1].trim()
-    } else {
-      // Try to extract JSON object directly
-      const jsonObjectMatch = cleanedResponse.match(/\{[\s\S]*\}/)
-      if (jsonObjectMatch) {
-        cleanedResponse = jsonObjectMatch[0]
-      }
+    // Extract ONLY valid JSON part
+    const jsonStart = cleanedResponse.indexOf('{')
+    const jsonEnd = cleanedResponse.lastIndexOf('}')
+
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+       cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1)
+    }else {
+     throw new Error("No JSON found in Gemini response")
     }
+
+    // // Remove markdown code fences (```json ... ``` or ``` ... ```)
+    // const jsonMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)```/)
+    // if (jsonMatch) {
+    //   cleanedResponse = jsonMatch[1].trim()
+    // } else {
+    //   // Try to extract JSON object directly
+    //   const jsonObjectMatch = cleanedResponse.match(/\{[\s\S]*\}/)
+    //   if (jsonObjectMatch) {
+    //     cleanedResponse = jsonObjectMatch[0]
+    //   }
+    // }
 
     // let feedback
     // try {
