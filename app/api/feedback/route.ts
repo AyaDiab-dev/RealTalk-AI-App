@@ -193,6 +193,7 @@ RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
 
     const result = await model.generateContent(prompt)
     const responseText = result.response.text()
+    console.log("RAW GEMINI RESPONSE:", responseText)
     
     // Clean the response - remove markdown code blocks if present
     let cleanedResponse = responseText.trim()
