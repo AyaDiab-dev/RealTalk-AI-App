@@ -55,7 +55,7 @@ You MUST respond with ONLY valid JSON in this exact format (no markdown, no code
 Be specific and reference actual things the user said. Don't be generic.`
 
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 1500,
