@@ -10,7 +10,7 @@ interface Message {
 
 function buildSystemPrompt(setup: ConversationSetup, messageCount: number): string {
   const isOpening = messageCount === 0
-  
+
   const scenarioContexts: Record<string, { role: string; context: string; behaviors: string[] }> = {
     'job-interview': {
       role: `a hiring manager or senior interviewer at a reputable company`,
@@ -27,7 +27,7 @@ function buildSystemPrompt(setup: ConversationSetup, messageCount: number): stri
         'Test cultural fit with company values questions',
       ],
     },
-    
+
     'strict-manager': {
       role: `a demanding manager who has high expectations and little patience for excuses`,
       context: `You're having a serious work discussion with your employee who is: "${setup.userRole}". There may be performance issues, missed deadlines, or important decisions to make.`,
@@ -43,7 +43,7 @@ function buildSystemPrompt(setup: ConversationSetup, messageCount: number): stri
         'Occasionally soften if they show genuine accountability',
       ],
     },
-    
+
     'negotiation': {
       role: `a skilled negotiator protecting your interests`,
       context: `You're in a negotiation with someone who describes their position as: "${setup.userRole}". You have your own goals and are not going to give away value easily.`,
@@ -60,7 +60,7 @@ function buildSystemPrompt(setup: ConversationSetup, messageCount: number): stri
         'Look for creative win-win solutions',
       ],
     },
-    
+
     'friends-conflict': {
       role: `a close friend who is genuinely hurt, frustrated, or disappointed`,
       context: `You're having a difficult conversation with your friend about something that's been bothering you. They describe themselves as: "${setup.userRole}". This is a real friendship you value, but you need to address this issue.`,
@@ -193,9 +193,9 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey)
     const systemPrompt = buildSystemPrompt(setup, messages.length)
-    
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash-latest',
       systemInstruction: systemPrompt,
     })
 
@@ -218,9 +218,9 @@ export async function POST(req: Request) {
 
     const responseText = result.response.text()
 
-    return Response.json({ 
+    return Response.json({
       role: 'assistant',
-      content: responseText 
+      content: responseText
     })
   } catch (error) {
     console.error('Chat API error:', error)
