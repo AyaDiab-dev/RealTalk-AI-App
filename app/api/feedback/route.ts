@@ -123,24 +123,88 @@ Important:
     
     // Clean the response - remove markdown code blocks if present
     let cleanedResponse = responseText.trim()
-    if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.slice(7)
-    } else if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(3)
+    
+    // Remove markdown code fences (```json ... ``` or ``` ... ```)
+    const jsonMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (jsonMatch) {
+      cleanedResponse = jsonMatch[1].trim()
+    } else {
+      // Try to extract JSON object directly
+      const jsonObjectMatch = cleanedResponse.match(/\{[\s\S]*\}/)
+      if (jsonObjectMatch) {
+        cleanedResponse = jsonObjectMatch[0]
+      }
     }
-    if (cleanedResponse.endsWith('```')) {
-      cleanedResponse = cleanedResponse.slice(0, -3)
-    }
-    cleanedResponse = cleanedResponse.trim()
 
-    const feedback = JSON.parse(cleanedResponse)
+    let feedback
+    try {
+      feedback = JSON.parse(cleanedResponse)
+    } catch {
+      // Return a safe fallback if parsing fails
+      console.error('Failed to parse Gemini response:', cleanedResponse)
+      feedback = {
+        readinessScore: 5,
+        whatUserDidWell: [
+          'Engaged in the conversation actively',
+          'Showed willingness to practice difficult scenarios',
+          'Maintained the conversation flow'
+        ],
+        whatUserDidWrong: [
+          'Could provide more specific examples',
+          'Could be more concise in responses',
+          'Could ask more clarifying questions'
+        ],
+        betterResponse: {
+          original: 'Your response',
+          improved: 'Try to be more specific and provide concrete examples when answering questions.'
+        },
+        practicalTips: [
+          'Prepare specific examples before important conversations',
+          'Practice active listening and ask follow-up questions',
+          'Stay calm under pressure and take time to think before responding',
+          'Use the STAR method for behavioral questions',
+          'End conversations on a positive note with clear next steps'
+        ],
+        thingsToWorkOn: [
+          'Specificity in answers',
+          'Confidence in delivery',
+          'Handling unexpected questions'
+        ]
+      }
+    }
 
     return Response.json(feedback)
   } catch (error) {
     console.error('Feedback API error:', error)
-    return Response.json(
-      { error: 'Something went wrong while generating feedback. Please try again.' },
-      { status: 500 }
-    )
+    // Return fallback feedback instead of error
+    return Response.json({
+      readinessScore: 5,
+      whatUserDidWell: [
+        'Completed the practice session',
+        'Showed commitment to improving',
+        'Engaged with the scenario'
+      ],
+      whatUserDidWrong: [
+        'Could not analyze specific areas due to a technical issue',
+        'Try another session for detailed feedback',
+        'Consider reviewing your responses'
+      ],
+      betterResponse: {
+        original: 'Unable to analyze',
+        improved: 'Try running the feedback again for specific suggestions.'
+      },
+      practicalTips: [
+        'Practice with different scenarios to build versatility',
+        'Record yourself and review your responses',
+        'Ask for feedback from real people when possible',
+        'Stay calm and take your time when responding',
+        'Focus on clarity and specificity'
+      ],
+      thingsToWorkOn: [
+        'General communication skills',
+        'Scenario-specific techniques',
+        'Confidence and composure'
+      ]
+    })
   }
 }

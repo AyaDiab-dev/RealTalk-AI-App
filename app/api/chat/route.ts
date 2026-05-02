@@ -167,6 +167,42 @@ function buildSystemPrompt(setup: ConversationSetup, messageCount: number): stri
   const scenario = scenarioContexts[setup.conversationType]
   const personality = personalityStyles[setup.aiPersonality]
 
+  const scenarioEndings: Record<string, string> = {
+    'job-interview': `ENDING BEHAVIOR (after 5-7 exchanges): 
+- You control the interview ending
+- Wrap up naturally: "We're running short on time..."
+- Ask if they have questions for you
+- Close professionally: "Thank you for your time, we'll be in touch..."`,
+
+    'strict-manager': `ENDING BEHAVIOR (when appropriate):
+- End with clear next steps or expectations
+- Set deadlines: "I expect to see X by Y date"
+- Make consequences clear if needed
+- Close with "I hope we're on the same page"`,
+
+    'negotiation': `ENDING BEHAVIOR (when terms are discussed):
+- Summarize agreed terms before ending
+- Either accept, reject, or propose final terms
+- Say "Let me think about it" if undecided
+- Close with clear next steps`,
+
+    'friends-conflict': `ENDING BEHAVIOR (when natural):
+- Either side can move toward closure
+- End with emotional resolution or realistic tension
+- Don't force fake resolution
+- "I need some time to think" is valid`,
+
+    'presentation': `ENDING BEHAVIOR (after Q&A):
+- Give a short final impression of the presentation
+- "That was informative..." or "I still have concerns about..."
+- Thank them for their time`,
+
+    'debate': `ENDING BEHAVIOR (after main arguments):
+- Summarize the key points of disagreement
+- Give a final challenge or concluding statement
+- "We'll have to agree to disagree on..." is valid`,
+  }
+
   const openingInstructions = isOpening ? `
 OPENING: This is the start of the conversation. Set the scene naturally:
 - Greet them appropriately for the situation
@@ -177,8 +213,9 @@ CONTINUATION: The conversation is underway.
 - React directly to what they just said
 - Build on previous exchanges - reference things they mentioned earlier
 - Progress the conversation naturally
-- Vary your approach based on how they're doing
-- ALWAYS end with a follow-up question or clear invitation for them to continue`
+- Vary your approach based on how they're doing`
+
+  const endingBehavior = scenarioEndings[setup.conversationType]
 
   return `You are ${scenario.role}.
 
@@ -197,21 +234,34 @@ ${scenario.behaviors.map(b => `• ${b}`).join('\n')}
 
 ${openingInstructions}
 
+${endingBehavior}
+
+CONVERSATION MANAGEMENT RULES (CRITICAL):
+After EVERY user response, you MUST do ONE of these:
+a) Ask a realistic follow-up question
+b) Move to the next stage of the scenario
+c) Professionally close the conversation if it naturally reached an ending
+
+If the user gives a LONG answer:
+- Acknowledge briefly in ONE sentence ("Good point about X" or "I see what you mean")
+- Then immediately continue with your next question or move forward
+- Do NOT give lengthy responses to long answers
+
+FORMAT RULES:
+- Maximum 4 lines before asking your next question
+- Do NOT over-praise ("Excellent!", "Great answer!", "Perfect!")
+- Stay realistic and role-specific
+- Never leave the conversation hanging without a clear next step
+
 CRITICAL RULES:
 1. NEVER repeat yourself or ask the same question twice
 2. ALWAYS react specifically to what they said - reference their exact words
 3. NEVER break character or acknowledge this is practice
-4. Keep responses concise (1-4 sentences) to maintain natural conversation flow
-5. Ask follow-up questions that dig deeper into their answers
-6. Show realistic human reactions - confusion, interest, skepticism, satisfaction
-7. Create natural conversation progression - don't jump randomly between topics
-8. If they give a great answer, acknowledge it briefly then challenge them on something new
-9. If they give a weak answer, probe deeper or express appropriate concern
-10. Vary your sentence structure and response length naturally
-11. NEVER over-praise - be realistic in your reactions
-12. NEVER sound robotic - use natural, conversational language
-13. ALWAYS continue the conversation - don't end abruptly unless the user ends it
-14. End each response with either a question or a clear cue for them to continue
+4. Keep responses concise (1-4 sentences maximum)
+5. Show realistic human reactions - confusion, interest, skepticism
+6. Create natural conversation progression
+7. NEVER sound robotic or scripted
+8. ALWAYS end with a question OR clear cue to continue OR natural closing
 
 Remember: Make this feel like a REAL ${conversationTypeLabels[setup.conversationType].toLowerCase()}, not a scripted exercise.`
 }

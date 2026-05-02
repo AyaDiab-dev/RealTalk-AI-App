@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home } from 'lucide-react'
+import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home, Share2, Link2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 
 interface Message {
   id: string
@@ -35,8 +36,87 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showEndModal, setShowEndModal] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const { toast } = useToast()
+
+  // Create a shareable conversation snapshot
+  const createShareableLink = useCallback(() => {
+    const snapshot = {
+      setup: {
+        type: setup.conversationType,
+        role: setup.userRole,
+        personality: setup.aiPersonality,
+        goal: setup.userGoal,
+      },
+      messages: messages.map(m => ({
+        r: m.role === 'user' ? 'u' : 'a',
+        c: m.content.substring(0, 500), // Limit content length
+      })),
+      ts: Date.now(),
+    }
+    
+    const encoded = btoa(encodeURIComponent(JSON.stringify(snapshot)))
+    const baseUrl = window.location.origin
+    return `${baseUrl}/share?data=${encoded}`
+  }, [setup, messages])
+
+  const handleCopyLink = useCallback(async () => {
+    if (messages.length === 0) {
+      toast({
+        title: 'No conversation to share',
+        description: 'Start a conversation first before sharing.',
+      })
+      return
+    }
+
+    try {
+      const link = createShareableLink()
+      await navigator.clipboard.writeText(link)
+      setLinkCopied(true)
+      toast({
+        title: 'Link copied',
+        description: 'Conversation link copied to clipboard.',
+      })
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      toast({
+        title: 'Failed to copy',
+        description: 'Could not copy link to clipboard.',
+      })
+    }
+  }, [messages, createShareableLink, toast])
+
+  const handleShare = useCallback(async () => {
+    if (messages.length === 0) {
+      toast({
+        title: 'No conversation to share',
+        description: 'Start a conversation first before sharing.',
+      })
+      return
+    }
+
+    const link = createShareableLink()
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `RealTalk AI - ${conversationTypeLabels[setup.conversationType]} Practice`,
+          text: `Check out my conversation practice session!`,
+          url: link,
+        })
+      } catch (err) {
+        // User cancelled or share failed, fallback to copy
+        if ((err as Error).name !== 'AbortError') {
+          handleCopyLink()
+        }
+      }
+    } else {
+      // Fallback to copy link
+      handleCopyLink()
+    }
+  }, [messages, createShareableLink, setup.conversationType, toast, handleCopyLink])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -156,12 +236,30 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
           </div>
           <div className="flex items-center gap-2">
             <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleShare}
+              disabled={messages.length === 0}
+              title="Share conversation"
+            >
+              <Share2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleCopyLink}
+              disabled={messages.length === 0}
+              title="Copy link"
+            >
+              {linkCopied ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => setShowEndModal(true)}
             >
               <Square className="w-3 h-3 mr-1.5" />
-              End
+              Finish Session
             </Button>
             <Button
               size="sm"
@@ -179,7 +277,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
       <Dialog open={showEndModal} onOpenChange={setShowEndModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>End Conversation</DialogTitle>
+            <DialogTitle>Finish Session</DialogTitle>
             <DialogDescription>
               What would you like to do next?
             </DialogDescription>
