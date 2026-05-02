@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, UIMessage } from 'ai'
-import { Send, Square, MessageSquare, Sparkles, ArrowLeft } from 'lucide-react'
+import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface ChatScreenProps {
   setup: ConversationSetup
@@ -26,6 +27,7 @@ function getMessageText(message: UIMessage): string {
 
 export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
   const [input, setInput] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -40,6 +42,10 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
         },
       }),
     }),
+    onError: (err) => {
+      console.error('[v0] Chat error:', err)
+      setError('Failed to get AI response. The AI Gateway may require credit card verification. Please check your Vercel account settings.')
+    },
   })
 
   const isLoading = status === 'streaming' || status === 'submitted'
@@ -59,6 +65,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
+    setError(null)
     sendMessage({ text: input.trim() })
     setInput('')
     textareaRef.current?.focus()
@@ -120,6 +127,30 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
       {/* Messages */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{error}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setError(null)
+                    if (messages.length > 0) {
+                      const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
+                      if (lastUserMessage) {
+                        sendMessage({ text: getMessageText(lastUserMessage) })
+                      }
+                    }
+                  }}
+                  className="ml-4"
+                >
+                  Retry
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-4">
             {messages.map((message) => (
               <div

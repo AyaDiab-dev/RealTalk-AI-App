@@ -180,21 +180,31 @@ Remember: Make this feel like a REAL ${conversationTypeLabels[setup.conversation
 }
 
 export async function POST(req: Request) {
-  const { messages, setup }: { messages: UIMessage[]; setup: ConversationSetup } = await req.json()
+  try {
+    const { messages, setup }: { messages: UIMessage[]; setup: ConversationSetup } = await req.json()
 
-  const systemPrompt = buildSystemPrompt(setup, messages.length)
+    const systemPrompt = buildSystemPrompt(setup, messages.length)
 
-  const result = streamText({
-    model: 'openai/gpt-4o-mini',
-    system: systemPrompt,
-    messages: await convertToModelMessages(messages),
-    temperature: 0.85,
-    maxOutputTokens: 300,
-    abortSignal: req.signal,
-  })
+    const result = streamText({
+      model: 'openai/gpt-4o-mini',
+      system: systemPrompt,
+      messages: await convertToModelMessages(messages),
+      temperature: 0.85,
+      maxOutputTokens: 300,
+      abortSignal: req.signal,
+    })
 
-  return result.toUIMessageStreamResponse({
-    originalMessages: messages,
-    consumeSseStream: consumeStream,
-  })
+    return result.toUIMessageStreamResponse({
+      originalMessages: messages,
+      consumeSseStream: consumeStream,
+    })
+  } catch (error) {
+    console.error('[v0] Chat API error:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to generate response. Please check your Vercel AI Gateway configuration.' 
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 }
