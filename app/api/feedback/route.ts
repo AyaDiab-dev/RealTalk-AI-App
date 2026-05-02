@@ -211,42 +211,49 @@ RESPOND WITH ONLY THIS JSON (no markdown, no explanation):
       }
     }
 
+    // let feedback
+    // try {
+    //   feedback = JSON.parse(cleanedResponse)
+    // } catch {
+    //   // Return a safe fallback if parsing fails
+    //   console.error('Failed to parse Gemini response:', cleanedResponse)
+    //   feedback = {
+    //     readinessScore: 5,
+    //     whatUserDidWell: [
+    //       'Engaged in the conversation actively',
+    //       'Showed willingness to practice difficult scenarios',
+    //       'Maintained the conversation flow'
+    //     ],
+    //     whatUserDidWrong: [
+    //       'Could provide more specific examples',
+    //       'Could be more concise in responses',
+    //       'Could ask more clarifying questions'
+    //     ],
+    //     betterResponse: {
+    //       original: 'Your response',
+    //       improved: 'Try to be more specific and provide concrete examples when answering questions.'
+    //     },
+    //     practicalTips: [
+    //       'Prepare specific examples before important conversations',
+    //       'Practice active listening and ask follow-up questions',
+    //       'Stay calm under pressure and take time to think before responding',
+    //       'Use the STAR method for behavioral questions',
+    //       'End conversations on a positive note with clear next steps'
+    //     ],
+    //     thingsToWorkOn: [
+    //       'Specificity in answers',
+    //       'Confidence in delivery',
+    //       'Handling unexpected questions'
+    //     ]
+    //   }
+    // }
     let feedback
-    try {
-      feedback = JSON.parse(cleanedResponse)
-    } catch {
-      // Return a safe fallback if parsing fails
-      console.error('Failed to parse Gemini response:', cleanedResponse)
-      feedback = {
-        readinessScore: 5,
-        whatUserDidWell: [
-          'Engaged in the conversation actively',
-          'Showed willingness to practice difficult scenarios',
-          'Maintained the conversation flow'
-        ],
-        whatUserDidWrong: [
-          'Could provide more specific examples',
-          'Could be more concise in responses',
-          'Could ask more clarifying questions'
-        ],
-        betterResponse: {
-          original: 'Your response',
-          improved: 'Try to be more specific and provide concrete examples when answering questions.'
-        },
-        practicalTips: [
-          'Prepare specific examples before important conversations',
-          'Practice active listening and ask follow-up questions',
-          'Stay calm under pressure and take time to think before responding',
-          'Use the STAR method for behavioral questions',
-          'End conversations on a positive note with clear next steps'
-        ],
-        thingsToWorkOn: [
-          'Specificity in answers',
-          'Confidence in delivery',
-          'Handling unexpected questions'
-        ]
-      }
-    }
+try {
+  feedback = JSON.parse(cleanedResponse)
+} catch (error) {
+  console.error('❌ Failed to parse Gemini response:', cleanedResponse)
+  throw new Error("Failed to parse Gemini feedback JSON")
+}
 
     return Response.json(feedback)
   } catch (error) {
