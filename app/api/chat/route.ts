@@ -195,7 +195,7 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(setup, messages.length)
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest',
+      model: 'gemini-1.5-flash-001',
       systemInstruction: systemPrompt,
     })
 
