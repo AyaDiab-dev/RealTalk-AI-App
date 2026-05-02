@@ -1,11 +1,59 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { ConversationSetup, conversationTypeLabels, aiPersonalityLabels } from '@/lib/types'
+import { ConversationSetup, ConversationType, conversationTypeLabels, aiPersonalityLabels } from '@/lib/types'
 
 export const maxDuration = 60
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+}
+
+function getScenarioFeedbackFocus(conversationType: ConversationType): string {
+  const focusAreas: Record<ConversationType, string> = {
+    'job-interview': `Focus your feedback on:
+- Clarity and specificity of answers (did they use concrete examples?)
+- Confidence and professionalism in communication
+- Technical depth and relevant experience demonstration
+- Handling of behavioral questions (STAR method usage)
+- Recovery from difficult or unexpected questions`,
+
+    'strict-manager': `Focus your feedback on:
+- Professionalism and composure under pressure
+- Accountability and ownership of issues
+- Calmness and non-defensive communication
+- Quality of action plans and proposed solutions
+- Ability to set realistic expectations`,
+
+    'negotiation': `Focus your feedback on:
+- Persuasion techniques and value articulation
+- Use of leverage and positioning
+- Maintaining boundaries while staying flexible
+- Quality of counteroffers and creative solutions
+- Handling pressure and pushback`,
+
+    'friends-conflict': `Focus your feedback on:
+- Empathy and emotional intelligence
+- Emotional control and non-escalation
+- Clarity in expressing feelings and needs
+- Tone appropriateness for friendship context
+- Balance between assertiveness and understanding`,
+
+    'presentation': `Focus your feedback on:
+- Structure and logical flow of arguments
+- Confidence and clarity in delivery
+- Use of evidence and supporting data
+- Ability to handle Q&A effectively
+- Audience engagement and responsiveness`,
+
+    'debate': `Focus your feedback on:
+- Logical strength of arguments
+- Use of evidence and facts
+- Handling of counterarguments
+- Confidence and assertiveness
+- Ability to stay on point under pressure`,
+  }
+
+  return focusAreas[conversationType]
 }
 
 export async function POST(req: Request) {
@@ -26,6 +74,8 @@ export async function POST(req: Request) {
       .map((m) => `${m.role === 'user' ? 'User' : 'AI Partner'}: ${m.content}`)
       .join('\n\n')
 
+    const scenarioFocus = getScenarioFeedbackFocus(setup.conversationType)
+
     const prompt = `You are an expert conversation coach analyzing a practice conversation.
 
 SCENARIO DETAILS:
@@ -34,31 +84,37 @@ SCENARIO DETAILS:
 - AI Partner Personality: ${aiPersonalityLabels[setup.aiPersonality]}
 - User's Goal: ${setup.userGoal}
 
+${scenarioFocus}
+
 CONVERSATION TRANSCRIPT:
 ${conversationText}
 
-Analyze how well the user performed in achieving their goal. Provide constructive, specific feedback.
+Analyze how well the user performed in achieving their goal. Be specific and reference actual things the user said. Don't be generic or overly positive.
 
 You MUST respond with ONLY valid JSON in this exact format (no markdown, no code blocks, just raw JSON):
 {
   "readinessScore": <number 1-10>,
   "whatUserDidWell": ["<specific strength 1>", "<specific strength 2>", "<specific strength 3>"],
-  "whatUserDidWrong": ["<specific area for improvement 1>", "<specific area for improvement 2>", "<specific area for improvement 3>"],
+  "whatUserDidWrong": ["<specific weakness or missed opportunity 1>", "<specific weakness 2>", "<specific weakness 3>"],
   "betterResponse": {
     "original": "<exact quote of user's weakest response>",
-    "improved": "<rewritten version showing how it could be better>"
+    "improved": "<rewritten version showing how it could be much better>"
   },
   "practicalTips": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>", "<actionable tip 4>", "<actionable tip 5>"],
-  "thingsToWorkOn": ["<focus area 1>", "<focus area 2>", "<focus area 3>"]
+  "thingsToWorkOn": ["<specific focus area 1>", "<specific focus area 2>", "<specific focus area 3>"]
 }
 
-Be specific and reference actual things the user said. Don't be generic.`
+Important:
+- Be honest and constructive, not just encouraging
+- Reference specific quotes from the conversation
+- Make tips actionable and scenario-specific
+- The improved response should be noticeably better than the original`
 
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 2000,
       },
     })
 
@@ -82,9 +138,8 @@ Be specific and reference actual things the user said. Don't be generic.`
     return Response.json(feedback)
   } catch (error) {
     console.error('Feedback API error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Response.json(
-      { error: `Failed to generate feedback: ${errorMessage}` },
+      { error: 'Something went wrong while generating feedback. Please try again.' },
       { status: 500 }
     )
   }

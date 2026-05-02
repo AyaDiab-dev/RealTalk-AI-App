@@ -1,13 +1,20 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle } from 'lucide-react'
+import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface Message {
   id: string
@@ -19,13 +26,15 @@ interface ChatScreenProps {
   setup: ConversationSetup
   onEnd: () => void
   onGetFeedback: (messages: Message[]) => void
+  onRestart: () => void
 }
 
-export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
+export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScreenProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showEndModal, setShowEndModal] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -70,7 +79,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
 
       setMessages(prev => [...prev, assistantMessage])
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to get AI response'
+      const errorMessage = err instanceof Error ? err.message : 'Something went wrong while generating the response. Please try again.'
       setError(errorMessage)
     } finally {
       setIsLoading(false)
@@ -102,6 +111,26 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
 
   const canGetFeedback = messages.length >= 4 && !isLoading
 
+  const handleGetFeedbackClick = () => {
+    setShowEndModal(false)
+    onGetFeedback(messages)
+  }
+
+  const handleContinue = () => {
+    setShowEndModal(false)
+  }
+
+  const handleRestart = () => {
+    setShowEndModal(false)
+    setMessages([])
+    onRestart()
+  }
+
+  const handleBackToSetup = () => {
+    setShowEndModal(false)
+    onEnd()
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -111,7 +140,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={onEnd}
+              onClick={() => setShowEndModal(true)}
               className="text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -129,7 +158,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={onEnd}
+              onClick={() => setShowEndModal(true)}
             >
               <Square className="w-3 h-3 mr-1.5" />
               End
@@ -145,6 +174,55 @@ export function ChatScreen({ setup, onEnd, onGetFeedback }: ChatScreenProps) {
           </div>
         </div>
       </header>
+
+      {/* End Conversation Modal */}
+      <Dialog open={showEndModal} onOpenChange={setShowEndModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>End Conversation</DialogTitle>
+            <DialogDescription>
+              What would you like to do next?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            <Button
+              onClick={handleGetFeedbackClick}
+              disabled={!canGetFeedback}
+              className="w-full justify-start h-12"
+            >
+              <Sparkles className="w-4 h-4 mr-3" />
+              Get Performance Feedback
+              {!canGetFeedback && (
+                <span className="ml-auto text-xs opacity-70">Need more messages</span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleContinue}
+              className="w-full justify-start h-12"
+            >
+              <MessageSquare className="w-4 h-4 mr-3" />
+              Continue Conversation
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleRestart}
+              className="w-full justify-start h-12"
+            >
+              <RefreshCw className="w-4 h-4 mr-3" />
+              Restart Conversation
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleBackToSetup}
+              className="w-full justify-start h-12"
+            >
+              <Home className="w-4 h-4 mr-3" />
+              Back to Setup
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Messages */}
       <main className="flex-1 overflow-y-auto">

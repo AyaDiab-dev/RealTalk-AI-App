@@ -76,6 +76,38 @@ function buildSystemPrompt(setup: ConversationSetup, messageCount: number): stri
         'Soften when they show genuine understanding',
       ],
     },
+
+    'presentation': {
+      role: `an audience member or evaluator critically assessing a presentation`,
+      context: `You're attending a presentation by someone who describes themselves as: "${setup.userRole}". You're evaluating their clarity, structure, confidence, and use of evidence. You will ask tough Q&A questions.`,
+      behaviors: [
+        'Ask clarifying questions about unclear points',
+        'Challenge claims that lack evidence or data',
+        'Request specific examples or case studies',
+        'Point out logical inconsistencies',
+        'Ask "So what?" questions to test relevance',
+        'Probe the practical implications of their points',
+        'Test their knowledge depth with follow-up questions',
+        'Ask about limitations or counter-arguments',
+        'Evaluate their ability to handle unexpected questions',
+      ],
+    },
+
+    'debate': {
+      role: `a debate opponent who will challenge arguments and present counterpoints`,
+      context: `You're in a debate with someone who describes their position as: "${setup.userRole}". You disagree with their stance and will present opposing arguments while remaining respectful but firm.`,
+      behaviors: [
+        'Challenge the logic of their arguments',
+        'Ask for evidence to support their claims',
+        'Present counterarguments and alternative viewpoints',
+        'Point out flaws or weaknesses in their reasoning',
+        'Use rhetorical questions to expose contradictions',
+        'Acknowledge strong points but pivot to weaknesses',
+        'Press them when they avoid direct answers',
+        'Bring up edge cases that challenge their position',
+        'Maintain composure even when they make good points',
+      ],
+    },
   }
 
   const personalityStyles: Record<string, { tone: string; patterns: string[] }> = {
@@ -144,8 +176,9 @@ OPENING: This is the start of the conversation. Set the scene naturally:
 CONTINUATION: The conversation is underway. 
 - React directly to what they just said
 - Build on previous exchanges - reference things they mentioned earlier
-- Progress the conversation naturally toward resolution or conclusion
-- Vary your approach based on how they're doing`
+- Progress the conversation naturally
+- Vary your approach based on how they're doing
+- ALWAYS end with a follow-up question or clear invitation for them to continue`
 
   return `You are ${scenario.role}.
 
@@ -175,6 +208,10 @@ CRITICAL RULES:
 8. If they give a great answer, acknowledge it briefly then challenge them on something new
 9. If they give a weak answer, probe deeper or express appropriate concern
 10. Vary your sentence structure and response length naturally
+11. NEVER over-praise - be realistic in your reactions
+12. NEVER sound robotic - use natural, conversational language
+13. ALWAYS continue the conversation - don't end abruptly unless the user ends it
+14. End each response with either a question or a clear cue for them to continue
 
 Remember: Make this feel like a REAL ${conversationTypeLabels[setup.conversationType].toLowerCase()}, not a scripted exercise.`
 }
@@ -195,7 +232,7 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(setup, messages.length)
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: systemPrompt,
     })
 
@@ -208,8 +245,8 @@ export async function POST(req: Request) {
     const chat = model.startChat({
       history: chatHistory,
       generationConfig: {
-        temperature: 0.85,
-        maxOutputTokens: 300,
+        temperature: 0.9,
+        maxOutputTokens: 400,
       },
     })
 
@@ -224,9 +261,8 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error('Chat API error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Response.json(
-      { error: `Failed to generate response: ${errorMessage}` },
+      { error: 'Something went wrong while generating the response. Please try again.' },
       { status: 500 }
     )
   }

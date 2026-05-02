@@ -59,13 +59,20 @@ export function FeedbackScreen({
         })
 
         if (!response.ok) {
-          throw new Error('Failed to get feedback')
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to get feedback')
         }
 
         const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+        
         setFeedback(data)
       } catch (err) {
-        setError('Failed to generate feedback. Please try again.')
+        const errorMessage = err instanceof Error ? err.message : 'Something went wrong while generating feedback. Please try again.'
+        setError(errorMessage)
         console.error(err)
       } finally {
         setLoading(false)
@@ -96,14 +103,19 @@ export function FeedbackScreen({
   if (error || !feedback) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 max-w-md">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-destructive/10">
             <XCircle className="w-8 h-8 text-destructive" />
           </div>
           <div>
             <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
-            <p className="text-muted-foreground mb-4">{error}</p>
-            <Button onClick={onTryAgain}>Try Again</Button>
+            <p className="text-muted-foreground mb-4">
+              Something went wrong while generating feedback. Please try again.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={onStartNew}>Back to Setup</Button>
+              <Button onClick={onTryAgain}>Try Again</Button>
+            </div>
           </div>
         </div>
       </div>

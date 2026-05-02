@@ -18,10 +18,12 @@ export default function Home() {
   const [appState, setAppState] = useState<AppState>('setup')
   const [setup, setSetup] = useState<ConversationSetup | null>(null)
   const [conversationMessages, setConversationMessages] = useState<Message[]>([])
+  const [chatKey, setChatKey] = useState(0)
 
   const handleStart = (newSetup: ConversationSetup) => {
     setSetup(newSetup)
     setConversationMessages([])
+    setChatKey(prev => prev + 1)
     setAppState('chat')
   }
 
@@ -44,7 +46,13 @@ export default function Home() {
 
   const handleTryAgain = () => {
     setConversationMessages([])
+    setChatKey(prev => prev + 1)
     setAppState('chat')
+  }
+
+  const handleRestart = () => {
+    setConversationMessages([])
+    setChatKey(prev => prev + 1)
   }
 
   if (appState === 'setup') {
@@ -54,9 +62,11 @@ export default function Home() {
   if (appState === 'chat' && setup) {
     return (
       <ChatScreen
+        key={chatKey}
         setup={setup}
         onEnd={handleEndConversation}
         onGetFeedback={handleGetFeedback}
+        onRestart={handleRestart}
       />
     )
   }
