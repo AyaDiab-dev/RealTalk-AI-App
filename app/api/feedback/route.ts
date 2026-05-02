@@ -1,4 +1,5 @@
 import { generateText, Output } from 'ai'
+import { google } from '@ai-sdk/google'
 import { z } from 'zod'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
 
@@ -17,16 +18,17 @@ const feedbackSchema = z.object({
 })
 
 export async function POST(req: Request) {
-  const { messages, setup }: { messages: { role: string; content: string }[]; setup: ConversationSetup } = await req.json()
+  try {
+    const { messages, setup }: { messages: { role: string; content: string }[]; setup: ConversationSetup } = await req.json()
 
-  const conversationTranscript = messages
-    .map(m => `${m.role === 'user' ? 'USER' : 'AI PARTNER'}: ${m.content}`)
-    .join('\n\n')
+    const conversationTranscript = messages
+      .map(m => `${m.role === 'user' ? 'USER' : 'AI PARTNER'}: ${m.content}`)
+      .join('\n\n')
 
-  const result = await generateText({
-    model: 'openai/gpt-4o-mini',
-    output: Output.object({ schema: feedbackSchema }),
-    prompt: `You are an expert communication coach analyzing a practice conversation.
+    const result = await generateText({
+      model: google('gemini-1.5-flash'),
+      output: Output.object({ schema: feedbackSchema }),
+      prompt: `You are an expert communication coach analyzing a practice conversation.
 
 CONTEXT:
 - Scenario: ${conversationTypeLabels[setup.conversationType]}
@@ -53,7 +55,16 @@ For "practicalTips": Provide exactly 5 actionable tips for improving in this typ
 For "thingsToWorkOn": List exactly 3 specific skills or areas the user should focus on developing.
 
 Be constructive, specific, and encouraging while being honest about areas for improvement.`,
-  })
+    })
 
-  return Response.json(result.object)
+    return Response.json(result.object)
+  } catch (error) {
+    console.error('[v0] Feedback API error:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: 'Failed to generate feedback. Please check your GEMINI_API_KEY configuration.' 
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 }

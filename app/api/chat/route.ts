@@ -4,6 +4,7 @@ import {
   streamText,
   UIMessage,
 } from 'ai'
+import { google } from '@ai-sdk/google'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
 
 export const maxDuration = 60
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(setup, messages.length)
 
     const result = streamText({
-      model: 'openai/gpt-4o-mini',
+      model: google('gemini-1.5-flash'),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
       temperature: 0.85,
@@ -202,7 +203,7 @@ export async function POST(req: Request) {
     console.error('[v0] Chat API error:', error)
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to generate response. Please check your Vercel AI Gateway configuration.' 
+        error: 'Failed to generate response. Please check your GEMINI_API_KEY configuration.' 
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
