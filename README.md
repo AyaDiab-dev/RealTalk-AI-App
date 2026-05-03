@@ -1,35 +1,34 @@
-# v0-realtalk-ai
+# RealTalk AI — Boss Fight Interview Experience ⚔️
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+RealTalk AI is an interactive AI platform for practicing real-life conversations such as job interviews, negotiations, and difficult communication scenarios.
 
-## Built with v0
+##  Focus of this version
+While the platform is designed to support multiple scenarios, this version focuses on reimagining job interview preparation.
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+## ⚔️ Boss Fight Interview Mode
+Users go through 4 phases:
+- Warmup
+- Technical
+- Pressure
+- Final Boss
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_gMqYZO62m9ULDHJoHiYD8NvIbm33)
+Each phase increases in difficulty and simulates real interview pressure.
 
-## Getting Started
+## 🎮 Game Mechanics
+- Real-time HP system based on answer quality
+- Dynamic AI behavior
+- Increasing difficulty per phase
 
-First, run the development server:
+## 🏁 Final Verdict
+At the end of the interview:
+- 🏆 Hired
+- 👍 Strong Potential
+- 💀 Rejected
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
+##  Live Demo
+https://v0-realtalk-ai.vercel.app/
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+##  What makes this different
+I transformed interview preparation from passive practice into an active, high-pressure simulation.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
-
-<a href="https://v0.app/chat/api/kiro/clone/AyaDiab-dev/v0-realtalk-ai" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
+Users don’t just prepare, they survive.
