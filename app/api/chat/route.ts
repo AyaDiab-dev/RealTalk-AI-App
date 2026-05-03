@@ -94,27 +94,41 @@ TRAP QUESTIONS:
   }
 ]
 
-function getBossFightPrompt(phase: number, userRole: string): string {
+function getBossFightPrompt(phase: number, userRole: string, messageCount: number): string {
   const phaseData = BOSS_FIGHT_PHASES[phase] || BOSS_FIGHT_PHASES[0]
+  const isFinalPhase = phase === 3
+  const isNearEnd = isFinalPhase && messageCount >= 10
   
   return `${phaseData.systemPrompt}
 
 CANDIDATE INFO: ${userRole}
 
+FOLLOW-UP QUESTION RULES (MANDATORY):
+1. At the end of EVERY response, ask exactly ONE clear, specific follow-up question
+2. Do NOT ask multiple questions in the same response
+3. Do NOT use generic questions like "Anything else?" or "Does that make sense?"
+4. Keep your feedback to maximum 1 sentence, then immediately ask your question
+5. Your question must be directly related to what the candidate just said or the interview topic
+${isNearEnd ? `
+INTERVIEW CONCLUSION:
+- The interview is reaching its end
+- After 1-2 more exchanges, conclude professionally WITHOUT asking a question
+- End with: "Thank you for your time. It was great speaking with you. We will be in touch."
+- Do NOT ask a question when concluding the interview` : ''}
+
 CRITICAL RULES:
 1. Stay in character for this phase
-2. Keep responses to 2-4 sentences maximum
-3. ALWAYS end with a question or clear cue to continue
-4. Never break character or acknowledge this is practice
-5. React to their specific answers - reference what they said
-6. Do NOT include any role-play actions such as (pauses), (nods), *smiles*, or emotional descriptions in parentheses or asterisks
-7. Keep responses direct, realistic, and professional - like a real interviewer would speak`
+2. Keep responses to 2-4 sentences maximum (1 sentence feedback + 1 question)
+3. Never break character or acknowledge this is practice
+4. React to their specific answers - reference what they said
+5. Do NOT include any role-play actions such as (pauses), (nods), *smiles*, or emotional descriptions
+6. Keep responses direct, realistic, and professional - like a real interviewer would speak`
 }
 
 function buildSystemPrompt(setup: ConversationSetup, messageCount: number, phase?: number): string {
   // Handle Boss Fight mode separately
   if (setup.conversationType === 'boss-fight') {
-    return getBossFightPrompt(phase ?? 0, setup.userRole)
+    return getBossFightPrompt(phase ?? 0, setup.userRole, messageCount)
   }
 
   const isOpening = messageCount === 0
@@ -361,7 +375,16 @@ FORMAT RULES:
 - Stay realistic and role-specific
 - Never leave the conversation hanging without a clear next step
 
-CRITICAL RULES:
+${setup.conversationType === 'job-interview' ? `FOLLOW-UP QUESTION RULES (MANDATORY FOR INTERVIEWS):
+1. At the end of EVERY response, ask exactly ONE clear, specific follow-up question
+2. Do NOT ask multiple questions in the same response
+3. Do NOT use generic questions like "Anything else?" or "Does that make sense?"
+4. Keep your feedback to maximum 1 sentence, then immediately ask your question
+5. Your question must be directly related to what the candidate just said
+6. When concluding the interview (after 5-7 exchanges), do NOT ask a question
+7. End with: "Thank you for your time. It was great speaking with you. We will be in touch."
+
+` : ''}CRITICAL RULES:
 1. NEVER repeat yourself or ask the same question twice
 2. ALWAYS react specifically to what they said - reference their exact words
 3. NEVER break character or acknowledge this is practice
@@ -369,7 +392,8 @@ CRITICAL RULES:
 5. Show realistic human reactions - confusion, interest, skepticism
 6. Create natural conversation progression
 7. NEVER sound robotic or scripted
-8. ALWAYS end with a question OR clear cue to continue OR natural closing
+8. Do NOT include any role-play actions such as (pauses), (nods), *smiles*, or emotional descriptions
+9. ${setup.conversationType === 'job-interview' ? 'ALWAYS end with exactly ONE follow-up question, unless concluding the interview' : 'ALWAYS end with a question OR clear cue to continue OR natural closing'}
 
 Remember: Make this feel like a REAL ${conversationTypeLabels[setup.conversationType].toLowerCase()}, not a scripted exercise.`
 }
