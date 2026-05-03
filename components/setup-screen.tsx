@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageSquare, Target, User, Sparkles, ArrowRight } from 'lucide-react'
+import { MessageSquare, Target, User, Sparkles, ArrowRight, Swords } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -77,11 +77,25 @@ export function SetupScreen({ onStart }: SetupScreenProps) {
                 <SelectContent>
                   {Object.entries(conversationTypeLabels).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
-                      {label}
+                      <span className="flex items-center gap-2">
+                        {value === 'boss-fight' && <Swords className="w-4 h-4 text-red-500" />}
+                        {label}
+                        {value === 'boss-fight' && (
+                          <span className="text-xs text-red-500 font-medium">NEW</span>
+                        )}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {conversationType === 'boss-fight' && (
+                <div className="mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-xs text-red-400 font-medium mb-1">4-Phase Interview Gauntlet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Progress through Warmup → Technical → Pressure → Final Boss. Each phase gets harder. Can you survive?
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* User Role */}

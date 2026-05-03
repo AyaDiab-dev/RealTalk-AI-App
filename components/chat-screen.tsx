@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home, Share2, Link2, Check } from 'lucide-react'
+import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home, Share2, Link2, Check, Swords } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
@@ -23,6 +23,14 @@ interface Message {
   content: string
 }
 
+// Boss Fight Phase Configuration
+const BOSS_FIGHT_PHASES = [
+  { name: 'Warmup', color: 'bg-green-500', textColor: 'text-green-500', title: 'The Friendly Recruiter', icon: '👋' },
+  { name: 'Technical', color: 'bg-blue-500', textColor: 'text-blue-500', title: 'The Probing Tech Lead', icon: '🔧' },
+  { name: 'Pressure', color: 'bg-orange-500', textColor: 'text-orange-500', title: 'The Skeptical Manager', icon: '🔥' },
+  { name: 'Final Boss', color: 'bg-red-500', textColor: 'text-red-500', title: 'The Cold VP', icon: '⚔️' },
+]
+
 interface ChatScreenProps {
   setup: ConversationSetup
   onEnd: () => void
@@ -37,9 +45,20 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const [error, setError] = useState<string | null>(null)
   const [showEndModal, setShowEndModal] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [currentPhase, setCurrentPhase] = useState(0)
+  const [showPhaseTransition, setShowPhaseTransition] = useState(false)
+  const [transitionPhase, setTransitionPhase] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { toast } = useToast()
+
+  const isBossFight = setup.conversationType === 'boss-fight'
+
+  // Calculate phase based on AI message count (every 3 AI messages = new phase)
+  const calculatePhase = useCallback((msgs: Message[]) => {
+    const aiMessageCount = msgs.filter(m => m.role === 'assistant').length
+    return Math.min(Math.floor(aiMessageCount / 3), 3)
+  }, [])
 
   // Create a shareable conversation snapshot
   const createShareableLink = useCallback(() => {
@@ -142,6 +161,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
         body: JSON.stringify({
           messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
           setup,
+          phase: isBossFight ? currentPhase : undefined,
         }),
       })
 
@@ -157,14 +177,28 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
         content: data.content,
       }
 
-      setMessages(prev => [...prev, assistantMessage])
+      const newMessages = [...updatedMessages, assistantMessage]
+      setMessages(newMessages)
+
+      // Check for phase transition in Boss Fight mode
+      if (isBossFight) {
+        const newPhase = calculatePhase(newMessages)
+        if (newPhase > currentPhase && newPhase <= 3) {
+          setTransitionPhase(newPhase)
+          setShowPhaseTransition(true)
+          setTimeout(() => {
+            setCurrentPhase(newPhase)
+            setShowPhaseTransition(false)
+          }, 2000)
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Something went wrong while generating the response. Please try again.'
       setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
-  }, [messages, setup])
+  }, [messages, setup, isBossFight, currentPhase, calculatePhase])
 
   // Auto-start conversation
   useEffect(() => {
@@ -226,11 +260,15 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>
-              <h1 className="text-sm font-semibold">
+              <h1 className="text-sm font-semibold flex items-center gap-2">
+                {isBossFight && <Swords className="w-4 h-4 text-red-500" />}
                 {conversationTypeLabels[setup.conversationType]}
               </h1>
               <p className="text-xs text-muted-foreground">
-                {setup.userRole} • Goal: {setup.userGoal}
+                {isBossFight 
+                  ? `${setup.userRole} • Phase ${currentPhase + 1}/4`
+                  : `${setup.userRole} • Goal: ${setup.userGoal}`
+                }
               </p>
             </div>
           </div>
@@ -272,6 +310,65 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
           </div>
         </div>
       </header>
+
+      {/* Boss Fight Phase Header */}
+      {isBossFight && (
+        <div className="bg-card border-b border-border">
+          <div className="max-w-3xl mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className={cn(
+                  'px-3 py-1 rounded-full text-xs font-bold text-white',
+                  BOSS_FIGHT_PHASES[currentPhase].color
+                )}>
+                  PHASE {currentPhase + 1}
+                </span>
+                <span className={cn('font-semibold', BOSS_FIGHT_PHASES[currentPhase].textColor)}>
+                  {BOSS_FIGHT_PHASES[currentPhase].icon} {BOSS_FIGHT_PHASES[currentPhase].name}
+                </span>
+                <span className="text-muted-foreground text-sm">
+                  — {BOSS_FIGHT_PHASES[currentPhase].title}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {BOSS_FIGHT_PHASES.map((_, index) => (
+                  <div
+                    key={index}
+                    className={cn(
+                      'w-2.5 h-2.5 rounded-full transition-colors',
+                      index <= currentPhase ? BOSS_FIGHT_PHASES[index].color : 'bg-muted'
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase Transition Banner */}
+      {showPhaseTransition && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 animate-in fade-in duration-300">
+          <div className={cn(
+            'text-center px-8 py-6 rounded-2xl border-2 animate-in zoom-in-95 duration-500',
+            BOSS_FIGHT_PHASES[transitionPhase].color,
+            'border-white/20'
+          )}>
+            <div className="text-4xl mb-3">{BOSS_FIGHT_PHASES[transitionPhase].icon}</div>
+            <div className="text-white text-sm font-medium tracking-wider mb-1">
+              PHASE {transitionPhase + 1}
+            </div>
+            <div className="text-white text-2xl font-bold mb-2">
+              {BOSS_FIGHT_PHASES[transitionPhase].name.toUpperCase()}
+            </div>
+            <div className="text-white/80 text-sm">
+              {transitionPhase === 1 && 'Prove your technical skills'}
+              {transitionPhase === 2 && 'Survive the heat'}
+              {transitionPhase === 3 && 'Face the final challenge'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* End Conversation Modal */}
       <Dialog open={showEndModal} onOpenChange={setShowEndModal}>

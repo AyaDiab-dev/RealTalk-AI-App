@@ -1,4 +1,4 @@
-export type ConversationType = 'job-interview' | 'strict-manager' | 'negotiation' | 'friends-conflict' | 'presentation' | 'debate'
+export type ConversationType = 'job-interview' | 'strict-manager' | 'negotiation' | 'friends-conflict' | 'presentation' | 'debate' | 'boss-fight'
 
 export type AIPersonality = 'friendly' | 'neutral' | 'strict' | 'aggressive' | 'calm'
 
@@ -29,6 +29,7 @@ export const conversationTypeLabels: Record<ConversationType, string> = {
   'friends-conflict': 'Friends Conflict',
   'presentation': 'Presentation',
   'debate': 'Debate',
+  'boss-fight': 'Boss Fight Interview',
 }
 
 export const aiPersonalityLabels: Record<AIPersonality, string> = {
