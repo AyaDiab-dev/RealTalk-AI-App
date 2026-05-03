@@ -48,6 +48,9 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const [currentPhase, setCurrentPhase] = useState(0)
   const [showPhaseTransition, setShowPhaseTransition] = useState(false)
   const [transitionPhase, setTransitionPhase] = useState(0)
+  const [hp, setHp] = useState(70)
+  const [hpDelta, setHpDelta] = useState<number | null>(null)
+  const [isDefeated, setIsDefeated] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { toast } = useToast()
@@ -58,6 +61,29 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const calculatePhase = useCallback((msgs: Message[]) => {
     const aiMessageCount = msgs.filter(m => m.role === 'assistant').length
     return Math.min(Math.floor(aiMessageCount / 3), 3)
+  }, [])
+
+  // Calculate HP change based on answer quality using local heuristics
+  const calculateHpChange = useCallback((answer: string): number => {
+    const trimmed = answer.trim()
+    const wordCount = trimmed.split(/\s+/).length
+    const sentenceCount = (trimmed.match(/[.!?]+/g) || []).length
+    const hasStructure = /first|second|third|because|therefore|however|for example|specifically|in my experience/i.test(trimmed)
+    const hasNumbers = /\d+/.test(trimmed)
+    const isVague = /maybe|i think|probably|not sure|i guess|kind of|sort of/i.test(trimmed)
+    
+    // Very short or vague answers: -10 HP
+    if (wordCount < 15 || (wordCount < 30 && isVague)) {
+      return -10
+    }
+    
+    // Long, structured answers: +8 HP
+    if (wordCount >= 50 && (sentenceCount >= 3 || hasStructure) && (hasNumbers || !isVague)) {
+      return 8
+    }
+    
+    // Average answers: +2 HP
+    return 2
   }, [])
 
   // Create a shareable conversation snapshot
@@ -141,7 +167,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = useCallback(async (userMessage: string) => {
+  const sendMessage = useCallback(async (userMessage: string, isAutoStart = false) => {
     setError(null)
     setIsLoading(true)
 
@@ -153,6 +179,23 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
 
     const updatedMessages = [...messages, newUserMessage]
     setMessages(updatedMessages)
+
+    // Calculate HP change for Boss Fight (skip auto-start message)
+    if (isBossFight && !isAutoStart && !isDefeated) {
+      const hpChange = calculateHpChange(userMessage)
+      setHpDelta(hpChange)
+      
+      setHp(prevHp => {
+        const newHp = Math.max(0, Math.min(100, prevHp + hpChange))
+        if (newHp === 0) {
+          setIsDefeated(true)
+        }
+        return newHp
+      })
+      
+      // Clear delta display after 1.5 seconds
+      setTimeout(() => setHpDelta(null), 1500)
+    }
 
     try {
       const response = await fetch('/api/chat', {
@@ -198,12 +241,12 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
     } finally {
       setIsLoading(false)
     }
-  }, [messages, setup, isBossFight, currentPhase, calculatePhase])
+  }, [messages, setup, isBossFight, currentPhase, calculatePhase, calculateHpChange, isDefeated])
 
   // Auto-start conversation
   useEffect(() => {
     if (messages.length === 0) {
-      sendMessage(`Hello, I'm ready to practice this ${conversationTypeLabels[setup.conversationType].toLowerCase()} scenario.`)
+      sendMessage(`Hello, I'm ready to practice this ${conversationTypeLabels[setup.conversationType].toLowerCase()} scenario.`, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -340,6 +383,42 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
                     )}
                   />
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Boss Fight HP Bar */}
+      {isBossFight && (
+        <div className="bg-card/50 border-b border-border">
+          <div className="max-w-3xl mx-auto px-4 py-2">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-muted-foreground w-6">HP</span>
+              <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden relative">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500 ease-out',
+                    hp > 60 ? 'bg-green-500' : hp > 30 ? 'bg-yellow-500' : 'bg-red-500'
+                  )}
+                  style={{ width: `${hp}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-2 min-w-[80px] justify-end">
+                <span className={cn(
+                  'text-sm font-bold tabular-nums',
+                  hp > 60 ? 'text-green-500' : hp > 30 ? 'text-yellow-500' : 'text-red-500'
+                )}>
+                  {hp}%
+                </span>
+                {hpDelta !== null && (
+                  <span className={cn(
+                    'text-xs font-bold animate-in fade-in slide-in-from-bottom-2 duration-300',
+                    hpDelta > 0 ? 'text-green-400' : 'text-red-400'
+                  )}>
+                    {hpDelta > 0 ? '+' : ''}{hpDelta}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -489,36 +568,65 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
         </div>
       </main>
 
+      {/* Defeated Banner */}
+      {isBossFight && isDefeated && (
+        <div className="bg-red-950 border-t border-red-800">
+          <div className="max-w-3xl mx-auto px-4 py-6 text-center">
+            <div className="text-3xl mb-2">💀</div>
+            <h3 className="text-lg font-bold text-red-400 mb-1">You failed the interview under pressure</h3>
+            <p className="text-sm text-red-300/70 mb-4">Your HP reached 0. Better luck next time!</p>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={handleRestart} size="sm">
+                <RefreshCw className="w-3 h-3 mr-1.5" />
+                Try Again
+              </Button>
+              <Button onClick={() => onGetFeedback(messages)} size="sm" disabled={messages.length < 4}>
+                <Sparkles className="w-3 h-3 mr-1.5" />
+                Get Feedback Anyway
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <footer className="sticky bottom-0 bg-background border-t border-border">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          <form onSubmit={handleSubmit} className="flex gap-3 items-end">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your response..."
-                disabled={isLoading}
-                className="min-h-[52px] max-h-[200px] resize-none pr-4"
-                rows={1}
-              />
+          {isBossFight && isDefeated ? (
+            <div className="text-center py-3 text-muted-foreground text-sm">
+              Interview ended. Get feedback or try again.
             </div>
-            <Button
-              type="submit"
-              size="icon"
-              disabled={!input.trim() || isLoading}
-              className="h-[52px] w-[52px]"
-            >
-              {isLoading ? <Spinner className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-            </Button>
-          </form>
-          <p className="text-xs text-muted-foreground text-center mt-3">
-            {messages.length < 4
-              ? `Have at least ${4 - messages.length} more exchange${4 - messages.length === 1 ? '' : 's'} to get feedback`
-              : 'Ready to get feedback on your conversation'}
-          </p>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="flex gap-3 items-end">
+                <div className="flex-1 relative">
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type your response..."
+                    disabled={isLoading || isDefeated}
+                    className="min-h-[52px] max-h-[200px] resize-none pr-4"
+                    rows={1}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!input.trim() || isLoading || isDefeated}
+                  className="h-[52px] w-[52px]"
+                >
+                  {isLoading ? <Spinner className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                </Button>
+              </form>
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                {messages.length < 4
+                  ? `Have at least ${4 - messages.length} more exchange${4 - messages.length === 1 ? '' : 's'} to get feedback`
+                  : 'Ready to get feedback on your conversation'}
+              </p>
+            </>
+          )}
         </div>
       </footer>
     </div>
