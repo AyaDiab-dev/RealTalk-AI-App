@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home, Share2, Link2, Check, Swords } from 'lucide-react'
+import { Send, Square, MessageSquare, Sparkles, ArrowLeft, AlertCircle, RefreshCw, Home, Share2, Link2, Check, Swords, Trophy, ThumbsUp, Skull, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConversationSetup, conversationTypeLabels } from '@/lib/types'
@@ -51,6 +51,8 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const [hp, setHp] = useState(70)
   const [hpDelta, setHpDelta] = useState<number | null>(null)
   const [isDefeated, setIsDefeated] = useState(false)
+  const [showVerdict, setShowVerdict] = useState(false)
+  const [verdictCopied, setVerdictCopied] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { toast } = useToast()
@@ -61,6 +63,41 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
   const calculatePhase = useCallback((msgs: Message[]) => {
     const aiMessageCount = msgs.filter(m => m.role === 'assistant').length
     return Math.min(Math.floor(aiMessageCount / 3), 3)
+  }, [])
+
+  // Get verdict based on HP
+  const getVerdict = useCallback((finalHp: number) => {
+    if (finalHp >= 70) {
+      return {
+        result: 'HIRED',
+        icon: Trophy,
+        emoji: '🏆',
+        color: 'text-green-500',
+        bgColor: 'bg-green-500/10',
+        borderColor: 'border-green-500/20',
+        description: 'Congratulations! You demonstrated excellent interview skills and made a strong impression.',
+      }
+    } else if (finalHp >= 40) {
+      return {
+        result: 'STRONG POTENTIAL',
+        icon: ThumbsUp,
+        emoji: '👍',
+        color: 'text-yellow-500',
+        bgColor: 'bg-yellow-500/10',
+        borderColor: 'border-yellow-500/20',
+        description: 'Good effort! You showed promise but there is room for improvement in some areas.',
+      }
+    } else {
+      return {
+        result: 'REJECTED',
+        icon: Skull,
+        emoji: '💀',
+        color: 'text-red-500',
+        bgColor: 'bg-red-500/10',
+        borderColor: 'border-red-500/20',
+        description: 'The interview did not go well. Review your answers and try again.',
+      }
+    }
   }, [])
 
   // Calculate HP change based on answer quality using local heuristics
@@ -163,6 +200,35 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
     }
   }, [messages, createShareableLink, setup.conversationType, toast, handleCopyLink])
 
+  const handleCopyVerdict = useCallback(async () => {
+    const verdict = getVerdict(hp)
+    const shareText = `I just completed the Boss Fight Interview and got ${verdict.result} with ${hp}% HP ⚔️`
+    
+    try {
+      await navigator.clipboard.writeText(shareText)
+      setVerdictCopied(true)
+      toast({
+        title: 'Copied to clipboard',
+        description: 'Share your result with friends!',
+      })
+      setTimeout(() => setVerdictCopied(false), 2000)
+    } catch {
+      toast({
+        title: 'Failed to copy',
+        description: 'Could not copy to clipboard.',
+      })
+    }
+  }, [hp, getVerdict, toast])
+
+  const handlePlayAgain = useCallback(() => {
+    setShowVerdict(false)
+    setMessages([])
+    setHp(70)
+    setCurrentPhase(0)
+    setIsDefeated(false)
+    onRestart()
+  }, [onRestart])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -189,6 +255,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
         const newHp = Math.max(0, Math.min(100, prevHp + hpChange))
         if (newHp === 0) {
           setIsDefeated(true)
+          setTimeout(() => setShowVerdict(true), 1500)
         }
         return newHp
       })
@@ -233,6 +300,13 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
             setCurrentPhase(newPhase)
             setShowPhaseTransition(false)
           }, 2000)
+        }
+        
+        // Check if interview naturally concluded (final phase + enough exchanges)
+        const aiMessageCount = newMessages.filter(m => m.role === 'assistant').length
+        if (newPhase === 3 && aiMessageCount >= 12 && !isDefeated) {
+          // Delay showing verdict to let the final message appear
+          setTimeout(() => setShowVerdict(true), 1500)
         }
       }
     } catch (err) {
@@ -568,33 +642,85 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
         </div>
       </main>
 
-      {/* Defeated Banner */}
-      {isBossFight && isDefeated && (
-        <div className="bg-red-950 border-t border-red-800">
-          <div className="max-w-3xl mx-auto px-4 py-6 text-center">
-            <div className="text-3xl mb-2">💀</div>
-            <h3 className="text-lg font-bold text-red-400 mb-1">You failed the interview under pressure</h3>
-            <p className="text-sm text-red-300/70 mb-4">Your HP reached 0. Better luck next time!</p>
-            <div className="flex gap-3 justify-center">
-              <Button variant="outline" onClick={handleRestart} size="sm">
-                <RefreshCw className="w-3 h-3 mr-1.5" />
-                Try Again
-              </Button>
-              <Button onClick={() => onGetFeedback(messages)} size="sm" disabled={messages.length < 4}>
-                <Sparkles className="w-3 h-3 mr-1.5" />
-                Get Feedback Anyway
-              </Button>
+      {/* Verdict Screen */}
+      {isBossFight && showVerdict && (() => {
+        const verdict = getVerdict(hp)
+        const VerdictIcon = verdict.icon
+        return (
+          <div className="bg-card border-t border-border">
+            <div className="max-w-3xl mx-auto px-4 py-8">
+              {/* Main Verdict */}
+              <div className="text-center mb-8">
+                <div className="text-5xl mb-4">{verdict.emoji}</div>
+                <h2 className={cn('text-3xl font-bold mb-2', verdict.color)}>
+                  {verdict.result}
+                </h2>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  {verdict.description}
+                </p>
+                <div className={cn('inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full', verdict.bgColor)}>
+                  <span className="text-sm font-medium">Final HP:</span>
+                  <span className={cn('text-lg font-bold', verdict.color)}>{hp}%</span>
+                </div>
+              </div>
+
+              {/* Shareable Result Card */}
+              <div className={cn(
+                'border rounded-xl p-6 mb-6',
+                verdict.borderColor,
+                verdict.bgColor
+              )}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn('p-2 rounded-lg', verdict.bgColor)}>
+                      <VerdictIcon className={cn('w-6 h-6', verdict.color)} />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{setup.userRole || 'Candidate'}</p>
+                      <p className="text-sm text-muted-foreground">Boss Fight Interview Completed</p>
+                    </div>
+                  </div>
+                  <Swords className="w-5 h-5 text-muted-foreground" />
+                </div>
+                
+                <div className="flex items-center justify-between border-t border-border/50 pt-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Result</p>
+                    <p className={cn('font-bold', verdict.color)}>{verdict.result}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">Final HP</p>
+                    <p className={cn('font-bold', verdict.color)}>{hp}%</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button onClick={handleCopyVerdict} variant="outline" className="gap-2">
+                  {verdictCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {verdictCopied ? 'Copied!' : 'Share Result'}
+                </Button>
+                <Button onClick={handlePlayAgain} variant="outline" className="gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  Play Again
+                </Button>
+                <Button onClick={() => onGetFeedback(messages)} disabled={messages.length < 4} className="gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Get Detailed Feedback
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Input */}
       <footer className="sticky bottom-0 bg-background border-t border-border">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          {isBossFight && isDefeated ? (
+          {isBossFight && (isDefeated || showVerdict) ? (
             <div className="text-center py-3 text-muted-foreground text-sm">
-              Interview ended. Get feedback or try again.
+              {showVerdict ? 'Interview complete. View your verdict above.' : 'Interview ended. Get feedback or try again.'}
             </div>
           ) : (
             <>
@@ -606,7 +732,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type your response..."
-                    disabled={isLoading || isDefeated}
+                    disabled={isLoading || isDefeated || showVerdict}
                     className="min-h-[52px] max-h-[200px] resize-none pr-4"
                     rows={1}
                   />
@@ -614,7 +740,7 @@ export function ChatScreen({ setup, onEnd, onGetFeedback, onRestart }: ChatScree
                 <Button
                   type="submit"
                   size="icon"
-                  disabled={!input.trim() || isLoading || isDefeated}
+                  disabled={!input.trim() || isLoading || isDefeated || showVerdict}
                   className="h-[52px] w-[52px]"
                 >
                   {isLoading ? <Spinner className="w-4 h-4" /> : <Send className="w-4 h-4" />}
